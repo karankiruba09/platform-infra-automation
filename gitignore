@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+vendor/
+.bundle/
+*.gem
+
+# Environment
+.env
+.env.local
+.env.*.local
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+.terraform/
+.terraform.lock.hcl
+crash.log
+
+# Ansible
+*.retry
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build outputs
+dist/
+build/
+*.o
+*.so
+
+# Credentials & Secrets
+*.pem
+*.key
+*.crt
+secrets/
+config/secrets/
+
+# Temporary files
+*.tmp
+temp/
