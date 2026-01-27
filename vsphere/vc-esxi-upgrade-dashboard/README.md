@@ -40,6 +40,82 @@ A real-time web dashboard for monitoring ESXi host upgrades across multiple vCen
   - Handles PNG export functionality
 - **`style.css`**: Modern glassmorphic dark theme with gradient backgrounds, animations, and responsive layout
 
+## Quick Start
+
+Get the dashboard running in 5 minutes:
+
+### 1. Set Up Virtual Environment
+
+Create an isolated Python environment to avoid system-wide dependency conflicts:
+
+**Linux/macOS:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows (PowerShell):**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configure vCenters
+
+Edit `config/vcenters.yaml` with your vCenter details:
+
+```yaml
+vcenters:
+  - name: vCenter1
+    host: vcenter1.example.com
+    user: administrator@vsphere.local
+    password: "your-password"
+  - name: vCenter2
+    host: vcenter2.example.com
+    user: administrator@vsphere.local
+    password: "your-password"
+
+target_esxi_version: "8.0.3"
+```
+
+### 4. Run Data Collector
+
+Fetch ESXi host data from your vCenters:
+
+```bash
+python3 collector.py
+```
+
+You should see output like:
+```
+✓ vCenter1: 24 hosts
+✓ vCenter2: 32 hosts
+
+Wrote public/vcenters.json at 2026-01-27T14:32:45.123456+00:00
+```
+
+### 5. Start the Dashboard
+
+```bash
+python3 api.py
+```
+
+The dashboard will be available at: **http://localhost:8080**
+
+### 6. Deactivate Virtual Environment (when done)
+
+```bash
+deactivate
+```
+
+---
+
 ## Prerequisites
 
 - Python 3.6+
@@ -51,12 +127,13 @@ A real-time web dashboard for monitoring ESXi host upgrades across multiple vCen
 ## Installation
 
 1. Clone or download the project
-2. Install Python dependencies:
+2. Create and activate virtual environment (see Quick Start section)
+3. Install Python dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Configure vCenter connections in `config/vcenters.yaml`
+4. Configure vCenter connections in `config/vcenters.yaml`
 
 ## Configuration
 
