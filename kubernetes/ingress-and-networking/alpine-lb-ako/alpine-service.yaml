@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: alpine-loadbalancer
+  annotations:
+    # AKO annotations for AVI LoadBalancer configuration
+    ako.vmware.com/enable-virtual-service: "true"
+    ako.vmware.com/load-balancer-ip: "YOUR_STATIC_IP_HERE"  # Replace with your actual static IP
+    
+    # Optional: Specify application profile (default is System-L4-Application)
+    # ako.vmware.com/application-profile: "System-HTTP"
+    
+    # Optional: Specify network profile
+    # ako.vmware.com/network-profile: "System-TCP-Proxy"
+    
+    # Optional: Health monitor configuration
+    # ako.vmware.com/health-monitor-type: "HTTP"
+    # ako.vmware.com/health-monitor-path: "/"
+    
+spec:
+  type: LoadBalancer
+  selector:
+    app: alpine-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+    name: http
+  sessionAffinity: None

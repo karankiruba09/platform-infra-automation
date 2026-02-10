@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: alpine-loadbalancer-advanced
+  annotations:
+    # Required: Enable AVI Virtual Service creation via AKO
+    ako.vmware.com/enable-virtual-service: "true"
+    
+    # Required: Static IP assignment
+    ako.vmware.com/load-balancer-ip: "192.168.1.100"  # Replace with your static IP
+    
+    # Application profile - use HTTP for Layer 7 features
+    ako.vmware.com/application-profile: "System-HTTP"
+    
+    # Network profile for TCP optimization
+    ako.vmware.com/network-profile: "System-TCP-Proxy"
+    
+    # Health monitoring - HTTP based
+    ako.vmware.com/health-monitor-type: "HTTP"
+    ako.vmware.com/health-monitor-path: "/"
+    
+    # Optional: SSL/TLS configuration (if needed)
+    # ako.vmware.com/enable-tls: "true"
+    
+    # Optional: WAF policy (if needed)
+    # ako.vmware.com/waf-policy: "my-waf-policy"
+    
+spec:
+  type: LoadBalancer
+  selector:
+    app: alpine-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+    name: http
+  sessionAffinity: None
