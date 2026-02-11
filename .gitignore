@@ -18,6 +18,7 @@ bun.lockb
 .env.*.local
 *.pem
 *.key
+*.local.yml
 
 # --- Operating System files ---
 # macOS system files
@@ -37,6 +38,9 @@ build/
 out/
 bin/
 obj/
+reports/
+.venv/
+venv/
 
 # Logs
 npm-debug.log*
@@ -44,3 +48,8 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# --- Ansible / Vault artifacts ---
+.vault_pass
+vault_pass.txt
+*.vault_pass
+vault.yml

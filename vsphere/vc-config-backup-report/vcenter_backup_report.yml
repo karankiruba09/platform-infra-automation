@@ -1,0 +1,145 @@
+---
+# vCenter Backup Configuration Report to CSV
+# Usage: ansible-playbook vcenter_backup_report.yml -i inventory.yml --ask-vault-pass
+
+- name: Collect vCenter backup configuration
+  hosts: vcenters
+  gather_facts: false
+  vars_files:
+    - vault.yml
+  vars:
+    api_base: "https://{{ inventory_hostname }}/api"
+
+  tasks:
+    - name: Authenticate
+      ansible.builtin.uri:
+        url: "{{ api_base }}/session"
+        method: POST
+        url_username: "{{ vcenter_user }}"
+        url_password: "{{ vcenter_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ vcenter_validate_certs }}"
+        status_code: 201
+      register: session
+      no_log: true
+
+    - name: Extract session id
+      ansible.builtin.set_fact:
+        session_id: "{{ session.json | default(session.content) }}"
+      no_log: true
+
+    - name: Get backup schedules
+      ansible.builtin.uri:
+        url: "{{ api_base }}/appliance/recovery/backup/schedules"
+        method: GET
+        headers:
+          vmware-api-session-id: "{{ session_id }}"
+        validate_certs: "{{ vcenter_validate_certs }}"
+        status_code: [200, 404]
+      register: schedules
+
+    - name: Get last backup job details
+      ansible.builtin.uri:
+        url: "{{ api_base }}/appliance/recovery/backup/job/details"
+        method: GET
+        headers:
+          vmware-api-session-id: "{{ session_id }}"
+        validate_certs: "{{ vcenter_validate_certs }}"
+        status_code: [200, 404]
+      register: job_details
+
+    - name: Get system version
+      ansible.builtin.uri:
+        url: "{{ api_base }}/appliance/system/version"
+        method: GET
+        headers:
+          vmware-api-session-id: "{{ session_id }}"
+        validate_certs: "{{ vcenter_validate_certs }}"
+        status_code: 200
+      register: version
+
+    - name: Get time info
+      ansible.builtin.uri:
+        url: "{{ api_base }}/appliance/system/time"
+        method: GET
+        headers:
+          vmware-api-session-id: "{{ session_id }}"
+        validate_certs: "{{ vcenter_validate_certs }}"
+        status_code: 200
+      register: time_info
+      ignore_errors: true
+
+    - name: Logout
+      ansible.builtin.uri:
+        url: "{{ api_base }}/session"
+        method: DELETE
+        headers:
+          vmware-api-session-id: "{{ session_id }}"
+        validate_certs: "{{ vcenter_validate_certs }}"
+        status_code: 204
+      no_log: true
+
+    - name: Store collected data
+      ansible.builtin.set_fact:
+        vcenter_backup_data:
+          hostname: "{{ inventory_hostname }}"
+          version: "{{ version.json.value.version | default(version.json.version | default('N/A')) }}"
+          build: "{{ version.json.value.build | default(version.json.build | default('N/A')) }}"
+          schedules: "{{ schedules.json.value | default(schedules.json | default({})) }}"
+          job_details: "{{ job_details.json.value | default(job_details.json | default({})) }}"
+          timezone: >-
+            {{ time_info.json.value.timezone.name
+               | default(time_info.json.timezone.name
+               | default(time_info.json.value.timezone
+               | default(time_info.json.timezone
+               | default('N/A')))) }}
+          collected_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+- name: Generate CSV report
+  hosts: localhost
+  gather_facts: false
+  vars:
+    report_output_dir: "./reports"
+    data_json_path: "{{ report_output_dir }}/vcenter_backup_data.json"
+    report_csv_path: "{{ report_output_dir }}/vcenter_backup_report.csv"
+    csv_script_path: "{{ playbook_dir }}/generate_backup_report_csv.py"
+
+  tasks:
+    - name: Create output directory
+      ansible.builtin.file:
+        path: "{{ report_output_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Collect all data
+      ansible.builtin.set_fact:
+        all_backup_data: >-
+          {{ groups['vcenters']
+             | map('extract', hostvars, 'vcenter_backup_data')
+             | select('truthy')
+             | list }}
+
+    - name: Fail if no data collected
+      ansible.builtin.fail:
+        msg: "No vCenter data was collected. Check earlier tasks for failures."
+      when: all_backup_data | length == 0
+
+    - name: Write data to JSON file
+      ansible.builtin.copy:
+        dest: "{{ data_json_path }}"
+        content: "{{ all_backup_data | to_nice_json }}"
+        mode: "0644"
+
+    - name: Generate CSV report
+      ansible.builtin.command:
+        argv:
+          - python3
+          - "{{ csv_script_path }}"
+          - "{{ data_json_path }}"
+          - "{{ report_csv_path }}"
+      register: report_result
+      changed_when: true
+
+    - name: Report location
+      ansible.builtin.debug:
+        msg: "✓ Report: {{ report_csv_path }}"

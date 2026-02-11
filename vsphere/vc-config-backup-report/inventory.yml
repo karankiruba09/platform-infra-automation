@@ -1,0 +1,15 @@
+---
+# List your vCenter hostnames here
+# Credentials are stored in vault.yml (encrypted)
+
+all:
+  children:
+    vcenters:
+      hosts:
+        <vcenter_hostname_1>:
+        <vcenter_hostname_2>:
+  vars:
+    report_output_dir: "./reports"
+    vcenter_validate_certs: false
+    ansible_connection: local
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
