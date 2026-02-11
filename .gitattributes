@@ -1,5 +1,5 @@
 # Handle text files automatically
 * text=auto
 
-# Force shell scripts to always use LF (important for Windows devs)
+# Force shell scripts to always use LF
 *.sh text eol=lf
