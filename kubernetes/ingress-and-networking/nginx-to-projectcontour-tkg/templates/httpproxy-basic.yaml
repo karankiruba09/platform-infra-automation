@@ -1,0 +1,14 @@
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: <httpproxy-name>
+  namespace: <app-namespace>
+spec:
+  virtualhost:
+    fqdn: <app-fqdn>
+  routes:
+    - conditions:
+        - prefix: /
+      services:
+        - name: <backend-service-name>
+          port: <backend-service-port>

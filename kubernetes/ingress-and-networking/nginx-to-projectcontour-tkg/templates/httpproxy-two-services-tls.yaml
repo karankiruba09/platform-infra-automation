@@ -1,0 +1,33 @@
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: <proxy-app-1>
+  namespace: <app-namespace>
+spec:
+  virtualhost:
+    fqdn: <app1.example.internal>
+    tls:
+      secretName: <tls-secret-app-1>
+  routes:
+    - conditions:
+        - prefix: /
+      services:
+        - name: <service-app-1>
+          port: 8080
+---
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: <proxy-app-2>
+  namespace: <app-namespace>
+spec:
+  virtualhost:
+    fqdn: <app2.example.internal>
+    tls:
+      secretName: <tls-secret-app-2>
+  routes:
+    - conditions:
+        - prefix: /
+      services:
+        - name: <service-app-2>
+          port: 8080
