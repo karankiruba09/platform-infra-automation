@@ -30,10 +30,11 @@ Output files:
 ```text
 vc-config-backup-report/
 ├── vcenter_backup_report.yml      # Main playbook
-├── generate_backup_report_csv.py  # CSV generator
+├── templates/
+│   └── vcenter_backup_report.csv.j2 # CSV template renderer
 ├── inventory.yml                  # vCenter host inventory
 ├── vault.yml                      # Encrypted credentials
-├── requirements.txt               # Python/Ansible dependencies
+├── requirements.txt               # Ansible dependency
 └── reports/                       # Generated artifacts
 ```
 
@@ -137,6 +138,5 @@ The latest job is selected from `/api/appliance/recovery/backup/job/details`, in
 
 ## Requirements
 
-- Python 3.8+
 - Ansible 2.12+
 - vCenter 6.7+

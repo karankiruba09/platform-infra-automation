@@ -1,0 +1,147 @@
+{% set rows = [] %}
+{% set _ = rows.append('"vCenter","Version","Build","Timezone","Schedules","Enabled","Backup Location","Type","Recurrence","Retention","Last Job","Status","Start","End","Duration","Size (MB)"') %}
+{% for item in all_backup_data %}
+{% set hostname = item.hostname | default('N/A') %}
+{% set version = item.version | default('N/A') %}
+{% set build = item.build | default('N/A') %}
+{% set tz = item.timezone | default('N/A') %}
+
+{% set schedules_obj = item.schedules | default({}) %}
+{% set schedules = [] %}
+{% if schedules_obj is mapping %}
+  {% if schedules_obj['schedules'] is defined %}
+    {% set raw_schedules = schedules_obj['schedules'] %}
+    {% if raw_schedules is mapping %}
+      {% for sid, sv in raw_schedules.items() %}
+        {% if sv is mapping %}
+          {% set _ = schedules.append(sv | combine({'id': sid}, recursive=True)) %}
+        {% endif %}
+      {% endfor %}
+    {% elif raw_schedules is sequence and raw_schedules is not string %}
+      {% for sv in raw_schedules %}
+        {% if sv is mapping %}
+          {% set _ = schedules.append(sv) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% else %}
+    {% for sid, sv in schedules_obj.items() %}
+      {% if sv is mapping %}
+        {% set _ = schedules.append(sv | combine({'id': sid}, recursive=True)) %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+{% elif schedules_obj is sequence and schedules_obj is not string %}
+  {% for sv in schedules_obj %}
+    {% if sv is mapping %}
+      {% set _ = schedules.append(sv) %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% set job_obj = item.job_details | default({}) %}
+{% set jobs = [] %}
+{% if job_obj is mapping %}
+  {% if job_obj.status is defined or job_obj.start_time is defined or job_obj.end_time is defined %}
+    {% set _ = jobs.append(job_obj) %}
+  {% endif %}
+  {% if job_obj.details is defined %}
+    {% if job_obj.details is mapping %}
+      {% for jid, jval in job_obj.details.items() %}
+        {% if jval is mapping %}
+          {% set _ = jobs.append(jval | combine({'_job_id': jid}, recursive=True)) %}
+        {% endif %}
+      {% endfor %}
+    {% elif job_obj.details is sequence and job_obj.details is not string %}
+      {% for jval in job_obj.details %}
+        {% if jval is mapping %}
+          {% set _ = jobs.append(jval) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+  {% for jid, jval in job_obj.items() %}
+    {% if jval is mapping and (jval.status is defined or jval.start_time is defined or jval.end_time is defined) %}
+      {% set _ = jobs.append(jval | combine({'_job_id': jid}, recursive=True)) %}
+    {% endif %}
+  {% endfor %}
+{% elif job_obj is sequence and job_obj is not string %}
+  {% for j in job_obj %}
+    {% if j is mapping %}
+      {% set _ = jobs.append(j) %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% set latest_job = (jobs | sort(attribute='end_time') | last) if (jobs | length > 0) else {} %}
+{% set job_status = latest_job.status | default(latest_job.state | default(latest_job.result | default('NO JOB'))) %}
+{% set job_start = latest_job.start_time | default(latest_job.start | default('N/A')) %}
+{% set job_end = latest_job.end_time | default(latest_job.end | default('N/A')) %}
+{% set job_duration = latest_job.duration | default('N/A') %}
+{% set job_size = latest_job.size | default(latest_job.backup_size | default(latest_job.bytes_transferred | default(latest_job.total_bytes | default(0)))) %}
+{% set job_start_fmt = ('%Y-%m-%d %H:%M:%S UTC' | strftime((job_start | int // 1000))) if ((job_start is number) or ((job_start | string) | regex_search('^[0-9]+$'))) else (job_start | string) %}
+{% set job_end_fmt = ('%Y-%m-%d %H:%M:%S UTC' | strftime((job_end | int // 1000))) if ((job_end is number) or ((job_end | string) | regex_search('^[0-9]+$'))) else (job_end | string) %}
+{% set duration_seconds = (job_duration | int) if ((job_duration is number) or ((job_duration | string) | regex_search('^[0-9]+$'))) else -1 %}
+{% set job_duration_fmt = (((duration_seconds // 3600) | string) ~ 'h ' ~ (((duration_seconds % 3600) // 60) | string) ~ 'm ' ~ ((duration_seconds % 60) | string) ~ 's') if (duration_seconds >= 0) else (job_duration | string) %}
+{% set size_int = job_size | int %}
+{% set job_size_mb = ((size_int | float) / (1024 * 1024)) | round(2) %}
+
+{% if schedules | length == 0 %}
+{% set row =
+  '"' ~ (hostname | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (version | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (build | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (tz | string | replace('"', '""')) ~ '",' ~
+  '"0","N/A","N/A","N/A","N/A","N/A","Last",' ~
+  '"' ~ (job_status | string | upper | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_start_fmt | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_end_fmt | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_duration_fmt | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_size_mb | string | replace('"', '""')) ~ '"'
+%}
+{% set _ = rows.append(row) %}
+{% else %}
+  {% for sch in schedules %}
+    {% set enabled_raw = sch.enabled | default(sch.enable | default(false)) %}
+    {% set enabled = enabled_raw if (enabled_raw is boolean) else ((enabled_raw | string | lower) in ['1', 'true', 'yes', 'on']) %}
+    {% set location = sch.location | default(sch.location_url | default(sch.url | default(sch.target | default(sch.dest | default(sch.destination | default('N/A'))))) ) %}
+    {% set loc_type = sch.location_type | default(sch.type | default(sch.protocol | default((location.split('://')[0] if ('://' in (location | string)) else 'N/A')))) %}
+    {% set recur_raw = sch.recurrence | default(sch.schedule | default(sch.recurrence_info | default('N/A'))) %}
+    {% set retention_raw = sch.retention | default(sch.retention_info | default(sch.retention_policy | default(sch.max_count | default(sch.num_backups | default('N/A'))))) %}
+    {% if recur_raw is mapping and recur_raw.hour is defined %}
+      {% set recur_hour_24 = recur_raw.hour | int %}
+      {% set recur_minute = recur_raw.minute | default(0) | int %}
+      {% set recur_hour_12 = (recur_hour_24 % 12) if ((recur_hour_24 % 12) != 0) else 12 %}
+      {% set recur_ampm = 'AM' if (recur_hour_24 < 12) else 'PM' %}
+      {% if recur_minute == 0 %}
+        {% set recurrence = (recur_hour_12 | string) ~ ' ' ~ recur_ampm %}
+      {% else %}
+        {% set recurrence = (recur_hour_12 | string) ~ ':' ~ ('%02d' | format(recur_minute)) ~ ' ' ~ recur_ampm %}
+      {% endif %}
+    {% else %}
+      {% set recurrence = (recur_raw | to_json) if (recur_raw is mapping or (recur_raw is sequence and recur_raw is not string)) else (recur_raw | string) %}
+    {% endif %}
+    {% set retention = (retention_raw | to_json) if (retention_raw is mapping or (retention_raw is sequence and retention_raw is not string)) else (retention_raw | string) %}
+{% set row =
+  '"' ~ (hostname | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (version | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (build | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (tz | string | replace('"', '""')) ~ '",' ~
+  '"' ~ ((schedules | length) | string) ~ '",' ~
+  '"' ~ ((1 if enabled else 0) | string) ~ '",' ~
+  '"' ~ (location | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (loc_type | string | upper | replace('"', '""')) ~ '",' ~
+  '"' ~ (recurrence | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (retention | string | replace('"', '""')) ~ '",' ~
+  '"Last",' ~
+  '"' ~ (job_status | string | upper | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_start_fmt | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_end_fmt | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_duration_fmt | string | replace('"', '""')) ~ '",' ~
+  '"' ~ (job_size_mb | string | replace('"', '""')) ~ '"'
+%}
+{% set _ = rows.append(row) %}
+  {% endfor %}
+{% endif %}
+{% endfor %}
+{{ rows | join('\n') }}

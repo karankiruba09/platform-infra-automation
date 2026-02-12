@@ -1,0 +1,26 @@
+---
+# Defaults applied to all NSX managers unless overridden in nsx_backup_policy_by_host.
+nsx_backup_policy_default:
+  enabled: true
+  backup_schedule:
+    resource_type: IntervalBackupSchedule
+    seconds_between_backups: 86400
+  remote_file_server:
+    server: "sftp.example.local"
+    port: 22
+    protocol: SFTP
+    directory_path: "/nsx/config-backups"
+    authentication_scheme: PASSWORD
+    username: "nsx-backup"
+    password: "<set-in-vault-or-extra-vars>"
+
+# Optional host-specific overrides keyed by inventory hostname.
+nsx_backup_policy_by_host: {}
+# Example:
+# nsx_backup_policy_by_host:
+#   nsxmgr01.example.local:
+#     backup_schedule:
+#       resource_type: WeeklyBackupSchedule
+#       hour: 2
+#       minute: 30
+#       days: [MONDAY, THURSDAY]

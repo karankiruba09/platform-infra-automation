@@ -1,0 +1,280 @@
+---
+# NSX Manager backup report + configuration
+# Usage examples:
+#   ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass
+#   ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass -e "nsx_operation=configure nsx_confirm_configure=true" -e @backup_policies.yml
+
+- name: Manage NSX manager backup settings
+  hosts: nsx_managers
+  gather_facts: false
+  vars_files:
+    - vault.yml
+  vars:
+    nsx_operation: "{{ nsx_operation | default('report') }}"
+    nsx_validate_certs: "{{ nsx_validate_certs | default(vcenter_validate_certs | default(false)) }}"
+    nsx_api_base: "https://{{ inventory_hostname }}/api/v1"
+
+  tasks:
+    - name: Validate operation mode
+      ansible.builtin.assert:
+        that:
+          - nsx_operation in ['report', 'configure']
+        fail_msg: "Invalid nsx_operation={{ nsx_operation }}. Supported values: report, configure"
+
+    - name: Build desired backup policy for this manager
+      ansible.builtin.set_fact:
+        nsx_desired_backup_policy: >-
+          {{
+            (nsx_backup_policy_default | default({}))
+            | combine((nsx_backup_policy_by_host | default({}))[inventory_hostname] | default({}), recursive=True)
+          }}
+      when: nsx_operation == 'configure'
+
+    - name: Validate configure mode safety and payload
+      ansible.builtin.assert:
+        that:
+          - nsx_confirm_configure | default(false) | bool
+          - nsx_desired_backup_policy | length > 0
+        fail_msg: >-
+          Configure mode requires explicit confirmation and an input policy.
+          Example: -e "nsx_operation=configure nsx_confirm_configure=true" -e @backup_policies.yml
+      when: nsx_operation == 'configure'
+
+    - name: Apply backup configuration
+      ansible.builtin.uri:
+        url: "{{ nsx_api_base }}/cluster/backups/config"
+        method: PUT
+        url_username: "{{ nsx_user }}"
+        url_password: "{{ nsx_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ nsx_validate_certs }}"
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body: "{{ nsx_desired_backup_policy }}"
+        status_code: 200
+      register: nsx_apply_config_result
+      when: nsx_operation == 'configure'
+      no_log: true
+
+    - name: Get backup config
+      ansible.builtin.uri:
+        url: "{{ nsx_api_base }}/cluster/backups/config"
+        method: GET
+        url_username: "{{ nsx_user }}"
+        url_password: "{{ nsx_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ nsx_validate_certs }}"
+        status_code: [200, 404]
+      register: nsx_backup_config_rsp
+
+    - name: Get backup history
+      ansible.builtin.uri:
+        url: "{{ nsx_api_base }}/cluster/backups/history"
+        method: GET
+        url_username: "{{ nsx_user }}"
+        url_password: "{{ nsx_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ nsx_validate_certs }}"
+        status_code: [200, 404]
+      register: nsx_backup_history_rsp
+
+    - name: Get active backup status
+      ansible.builtin.uri:
+        url: "{{ nsx_api_base }}/cluster/backups/status"
+        method: GET
+        url_username: "{{ nsx_user }}"
+        url_password: "{{ nsx_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ nsx_validate_certs }}"
+        status_code: [200, 404]
+      register: nsx_backup_status_rsp
+
+    - name: Get NSX node version
+      ansible.builtin.uri:
+        url: "{{ nsx_api_base }}/node/version"
+        method: GET
+        url_username: "{{ nsx_user }}"
+        url_password: "{{ nsx_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ nsx_validate_certs }}"
+        status_code: [200, 404]
+      register: nsx_node_version_rsp
+      failed_when: false
+
+    - name: Normalize API responses
+      ansible.builtin.set_fact:
+        nsx_backup_config: "{{ nsx_backup_config_rsp.json | default({}) }}"
+        nsx_backup_history: "{{ nsx_backup_history_rsp.json | default({}) }}"
+        nsx_backup_status: "{{ nsx_backup_status_rsp.json | default({}) }}"
+        nsx_node_version: "{{ nsx_node_version_rsp.json | default({}) }}"
+
+    - name: Parse backup history
+      ansible.builtin.set_fact:
+        nsx_cluster_history: "{{ nsx_backup_history.cluster_backup_statuses | default([]) }}"
+        nsx_node_history: "{{ nsx_backup_history.node_backup_statuses | default([]) }}"
+        nsx_inventory_history: "{{ nsx_backup_history.inventory_backup_statuses | default([]) }}"
+
+    - name: Identify most recent backup results
+      ansible.builtin.set_fact:
+        nsx_cluster_last: >-
+          {{
+            (nsx_cluster_history | sort(attribute='end_time'))[-1]
+            if (nsx_cluster_history | length > 0)
+            else {}
+          }}
+        nsx_node_last: >-
+          {{
+            (nsx_node_history | sort(attribute='end_time'))[-1]
+            if (nsx_node_history | length > 0)
+            else {}
+          }}
+        nsx_inventory_last: >-
+          {{
+            (nsx_inventory_history | sort(attribute='end_time'))[-1]
+            if (nsx_inventory_history | length > 0)
+            else {}
+          }}
+
+    - name: Compute schedule summary
+      ansible.builtin.set_fact:
+        nsx_schedule: "{{ nsx_backup_config.backup_schedule | default({}) }}"
+        nsx_schedule_type: "{{ (nsx_backup_config.backup_schedule.resource_type | default('N/A')) }}"
+        nsx_schedule_summary: >-
+          {% set sch = nsx_backup_config.backup_schedule | default({}) %}
+          {% if sch.resource_type | default('') == 'IntervalBackupSchedule' %}
+          every {{ sch.seconds_between_backups | default('N/A') }} seconds
+          {% elif sch.resource_type | default('') == 'WeeklyBackupSchedule' %}
+          weekly {{ '%02d' | format(sch.hour | default(0) | int) }}:{{ '%02d' | format(sch.minute | default(0) | int) }} on {{ (sch.days | default([])) | join(',') }}
+          {% elif sch.resource_type | default('') != '' %}
+          configured ({{ sch.resource_type }})
+          {% else %}
+          N/A
+          {% endif %}
+
+    - name: Build report data for this manager
+      ansible.builtin.set_fact:
+        nsx_backup_data:
+          hostname: "{{ inventory_hostname }}"
+          version: "{{ nsx_node_version.node_version | default(nsx_node_version.product_version | default('N/A')) }}"
+          backup_enabled: "{{ nsx_backup_config.enabled | default(false) }}"
+          schedule_type: "{{ nsx_schedule_type }}"
+          schedule_summary: "{{ nsx_schedule_summary | trim }}"
+          remote_server: "{{ nsx_backup_config.remote_file_server.server | default('N/A') }}"
+          remote_port: "{{ nsx_backup_config.remote_file_server.port | default('N/A') }}"
+          remote_protocol: "{{ nsx_backup_config.remote_file_server.protocol | default('N/A') }}"
+          remote_directory: "{{ nsx_backup_config.remote_file_server.directory_path | default('N/A') }}"
+          auth_scheme: "{{ nsx_backup_config.remote_file_server.authentication_scheme | default('N/A') }}"
+          auth_user: "{{ nsx_backup_config.remote_file_server.username | default('N/A') }}"
+          cluster_last_result: >-
+            {{
+              'SUCCESS' if (nsx_cluster_last.success | default(false) | bool)
+              else ('FAILED' if ('success' in nsx_cluster_last) else 'N/A')
+            }}
+          cluster_last_start: >-
+            {{
+              '%Y-%m-%d %H:%M:%S UTC' | strftime((nsx_cluster_last.start_time | int // 1000))
+              if (nsx_cluster_last.start_time is defined)
+              else 'N/A'
+            }}
+          cluster_last_end: >-
+            {{
+              '%Y-%m-%d %H:%M:%S UTC' | strftime((nsx_cluster_last.end_time | int // 1000))
+              if (nsx_cluster_last.end_time is defined)
+              else 'N/A'
+            }}
+          cluster_last_error: "{{ nsx_cluster_last.error_code | default('N/A') }}"
+          node_last_result: >-
+            {{
+              'SUCCESS' if (nsx_node_last.success | default(false) | bool)
+              else ('FAILED' if ('success' in nsx_node_last) else 'N/A')
+            }}
+          node_last_start: >-
+            {{
+              '%Y-%m-%d %H:%M:%S UTC' | strftime((nsx_node_last.start_time | int // 1000))
+              if (nsx_node_last.start_time is defined)
+              else 'N/A'
+            }}
+          node_last_end: >-
+            {{
+              '%Y-%m-%d %H:%M:%S UTC' | strftime((nsx_node_last.end_time | int // 1000))
+              if (nsx_node_last.end_time is defined)
+              else 'N/A'
+            }}
+          inventory_last_result: >-
+            {{
+              'SUCCESS' if (nsx_inventory_last.success | default(false) | bool)
+              else ('FAILED' if ('success' in nsx_inventory_last) else 'N/A')
+            }}
+          inventory_last_start: >-
+            {{
+              '%Y-%m-%d %H:%M:%S UTC' | strftime((nsx_inventory_last.start_time | int // 1000))
+              if (nsx_inventory_last.start_time is defined)
+              else 'N/A'
+            }}
+          inventory_last_end: >-
+            {{
+              '%Y-%m-%d %H:%M:%S UTC' | strftime((nsx_inventory_last.end_time | int // 1000))
+              if (nsx_inventory_last.end_time is defined)
+              else 'N/A'
+            }}
+          active_status: >-
+            {{
+              (
+                'IN_PROGRESS' if (nsx_backup_status.backup_in_progress | default(false) | bool)
+                else 'IDLE'
+              )
+              if ('backup_in_progress' in nsx_backup_status)
+              else (nsx_backup_status.status | default('N/A'))
+            }}
+          active_message: "{{ nsx_backup_status.message | default(nsx_backup_status.error_message | default('N/A')) }}"
+          configured_this_run: "{{ nsx_operation == 'configure' }}"
+          collected_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+- name: Write NSX backup report artifacts
+  hosts: localhost
+  gather_facts: false
+  vars:
+    report_output_dir: "{{ report_output_dir | default('./reports') }}"
+    report_json_path: "{{ report_output_dir }}/nsx_backup_data.json"
+    report_csv_path: "{{ report_output_dir }}/nsx_backup_report.csv"
+
+  tasks:
+    - name: Create output directory
+      ansible.builtin.file:
+        path: "{{ report_output_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Collect manager data
+      ansible.builtin.set_fact:
+        all_backup_data: >-
+          {{
+            groups['nsx_managers']
+            | map('extract', hostvars, 'nsx_backup_data')
+            | select('truthy')
+            | list
+          }}
+
+    - name: Fail if nothing was collected
+      ansible.builtin.fail:
+        msg: "No NSX manager data was collected. Check earlier task failures."
+      when: all_backup_data | length == 0
+
+    - name: Write raw JSON report
+      ansible.builtin.copy:
+        dest: "{{ report_json_path }}"
+        content: "{{ all_backup_data | to_nice_json }}"
+        mode: "0644"
+
+    - name: Write CSV report
+      ansible.builtin.template:
+        src: "templates/nsx_backup_report.csv.j2"
+        dest: "{{ report_csv_path }}"
+        mode: "0644"
+
+    - name: Print output paths
+      ansible.builtin.debug:
+        msg:
+          - "NSX JSON report: {{ report_json_path }}"
+          - "NSX CSV report: {{ report_csv_path }}"

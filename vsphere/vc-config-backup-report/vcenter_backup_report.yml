@@ -102,7 +102,6 @@
     report_output_dir: "./reports"
     data_json_path: "{{ report_output_dir }}/vcenter_backup_data.json"
     report_csv_path: "{{ report_output_dir }}/vcenter_backup_report.csv"
-    csv_script_path: "{{ playbook_dir }}/generate_backup_report_csv.py"
 
   tasks:
     - name: Create output directory
@@ -130,15 +129,16 @@
         content: "{{ all_backup_data | to_nice_json }}"
         mode: "0644"
 
+    - name: Render CSV content
+      ansible.builtin.set_fact:
+        rendered_csv_content: >-
+          {{ lookup('template', 'templates/vcenter_backup_report.csv.j2') | trim }}
+
     - name: Generate CSV report
-      ansible.builtin.command:
-        argv:
-          - python3
-          - "{{ csv_script_path }}"
-          - "{{ data_json_path }}"
-          - "{{ report_csv_path }}"
-      register: report_result
-      changed_when: true
+      ansible.builtin.copy:
+        dest: "{{ report_csv_path }}"
+        content: "{{ rendered_csv_content ~ '\n' }}"
+        mode: "0644"
 
     - name: Report location
       ansible.builtin.debug:

@@ -1,0 +1,4 @@
+---
+# Copy to vault.yml and encrypt with ansible-vault.
+nsx_user: "admin"
+nsx_password: "<strong-password>"

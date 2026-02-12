@@ -1,0 +1,12 @@
+---
+all:
+  children:
+    nsx_managers:
+      hosts:
+        <nsx_manager_1_fqdn>:
+        <nsx_manager_2_fqdn>:
+  vars:
+    report_output_dir: "./reports"
+    nsx_validate_certs: false
+    ansible_connection: local
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
