@@ -1,0 +1,5 @@
+# Copy this file to `config/vcenters.txt` and replace placeholders before running the collector.
+# Lines support either `<name>|<fqdn>` or just `<fqdn>`.
+# Example:
+prod-vc01|vcenter01.example.com
+prod-vc02|vcenter02.example.com

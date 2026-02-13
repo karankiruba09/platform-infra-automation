@@ -1,0 +1,10 @@
+vcenters:
+  - name: vCenter1
+    host: vcenter1.example.com
+    user: administrator@vsphere.local
+    password: "YOUR_PASSWORD"
+  - name: vCenter2
+    host: vcenter2.example.com
+    user: administrator@vsphere.local
+    password: "YOUR_PASSWORD"
+target_esxi_version: "8.0.3"

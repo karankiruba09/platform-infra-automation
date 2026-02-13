@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESXi Versions Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="bg"></div>
+  <div class="grain"></div>
+
+  <header class="header">
+    <div class="brand">
+      <div class="title">ESXi Fleet</div>
+      <div class="subtitle">Version distribution across vCenters</div>
+      <div class="meta">
+        <span class="meta-item">
+          This dashboard is now server-rendered (no JavaScript).
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card span-6">
+      <div class="card-title">Static Report</div>
+      <div class="hint"><code>./scripts/collect.sh</code> renders <code>public/report.html</code>.</div>
+      <div class="hint">Open <code>public/report.html</code> directly in your browser.</div>
+    </section>
+
+    <section class="card span-6">
+      <div class="card-title">Optional Server</div>
+      <div class="hint"><code>python3 scripts/server.py</code></div>
+      <div class="hint">Then open <code>http://127.0.0.1:8081</code> and click <b>Refresh</b>.</div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESXi Upgrade Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body>
+  <div class="bg"></div>
+
+  <header class="header">
+    <div>
+      <div class="title">ESXi Upgrade Dashboard</div>
+      <div class="subtitle">This dashboard is now server-rendered (no JavaScript).</div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card" style="grid-column: span 12">
+      <div class="card-title">Run</div>
+      <div class="hint"><code>python3 collector.py</code> (writes <code>public/vcenters.json</code>)</div>
+      <div class="hint"><code>python3 api.py</code> (serves the dashboard at <code>http://127.0.0.1:8080/</code>)</div>
+    </section>
+  </main>
+</body>
+</html>

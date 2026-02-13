@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="refresh" content="{{ refresh_seconds }}" />
+  <title>ESXi Upgrade Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body>
+  <div class="bg"></div>
+
+  <header class="header">
+    <div>
+      <div class="title">ESXi Upgrade Dashboard</div>
+      <div class="subtitle">
+        Target ESXi: <span>{{ target_esxi_version }}</span>
+        <span class="dot">•</span>
+        Last updated: <span>{{ generated_at }}</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <a class="btn" href="/">Refresh</a>
+      <div class="pill">{{ health_pill }}</div>
+    </div>
+  </header>
+
+  <main class="grid">
+    {% if banner %}
+    <section class="card" style="grid-column: span 12">
+      <div class="hint">{{ banner }}</div>
+    </section>
+    {% endif %}
+
+    <section class="card kpi">
+      <div class="kpi-label">vCenters</div>
+      <div class="kpi-value">{{ kpi_vcenters }}</div>
+      <div class="kpi-foot">Connected sources</div>
+    </section>
+
+    <section class="card kpi">
+      <div class="kpi-label">Total hosts</div>
+      <div class="kpi-value">{{ kpi_hosts }}</div>
+      <div class="kpi-foot">Across all vCenters</div>
+    </section>
+
+    <section class="card kpi">
+      <div class="kpi-label">Upgraded</div>
+      <div class="kpi-value">{{ kpi_upgraded }}</div>
+      <div class="kpi-foot">Hosts at target</div>
+    </section>
+
+    <section class="card kpi">
+      <div class="kpi-label">Completion</div>
+      <div class="kpi-value">{{ kpi_completion }}</div>
+      <div class="kpi-foot">Weighted progress</div>
+    </section>
+
+    <section class="card table-card">
+      <div class="card-title">vCenter upgrade status</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>vCenter name</th>
+              <th class="num">Total hosts</th>
+              <th class="num">Upgrade completed (total)</th>
+              <th>Completion percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if rows %}
+              {% for r in rows %}
+              <tr>
+                <td>
+                  <span class="tag"><span class="bullet {{ r.health_cls }}"></span>{{ r.vcenter }}</span>
+                </td>
+                <td class="num">{{ r.total_hosts }}</td>
+                <td class="num">{{ r.upgrade_completed_total }}</td>
+                <td>
+                  <div class="progress-cell">
+                    <div class="progress-wrap"><div class="progress-bar" style="width: {{ r.pct_width }}%"></div></div>
+                    <div class="progress-label">{{ r.pct_str }}</div>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="4"><div class="hint">No data yet. Run <code>python3 collector.py</code>.</div></td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="hint">Auto-refreshes every {{ refresh_seconds }} seconds.</div>
+    </section>
+
+    <section class="card log-card">
+      <div class="card-title">Activity</div>
+      <div class="log">
+        {% if activity %}
+          {% for a in activity %}
+          <div class="log-item">
+            <div class="log-title">{{ a.msg }}</div>
+            <div class="log-meta">{{ a.ts }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="hint">No activity yet.</div>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+
