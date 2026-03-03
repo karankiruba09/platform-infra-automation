@@ -1,6 +1,7 @@
 # NSX Manager Backup Automation
 
 Single Ansible project with two functions:
+
 1. `report` mode: collect current NSX backup configuration and latest backup status from all NSX managers.
 2. `configure` mode: apply backup configuration from an input policy file.
 
@@ -34,7 +35,7 @@ nsx-config-backup-manager/
 pip install -r requirements.txt
 ```
 
-2. Prepare credentials:
+1. Prepare credentials:
 
 ```bash
 cp vault.yml.example vault.yml
@@ -42,7 +43,7 @@ vim vault.yml
 ansible-vault encrypt vault.yml
 ```
 
-3. Set your NSX managers:
+1. Set your NSX managers:
 
 ```bash
 vim inventory.yml
@@ -55,6 +56,7 @@ ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass
 ```
 
 Outputs:
+
 - `./reports/nsx_backup_data.json`
 - `./reports/nsx_backup_report.csv`
 
