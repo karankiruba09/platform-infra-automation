@@ -1,0 +1,129 @@
+---
+- name: Fetch Avi license utilization from multiple controllers
+  hosts: avi_controllers
+  gather_facts: false
+  connection: local
+  collections:
+    - community.network
+
+  vars_files:
+    - vars.yml
+    - vault.yml
+
+  tasks:
+    - name: Query Avi license usage
+      avi_api_session:
+        controller: "{{ ansible_host }}"
+        username: "{{ avi_username }}"
+        password: "{{ vault_avi_password }}"
+        path: "licenseusage"
+        http_method: get
+      register: license_api
+      ignore_errors: true
+
+    - name: Record successful endpoint
+      set_fact:
+        license_endpoint: "licenseusage"
+      when: not (license_api is failed)
+
+    - name: Record API query failure
+      set_fact:
+        license_query_failed: true
+        license_query_error: >-
+          {{
+            'invalid_credentials'
+            if 'Invalid credentials' in (
+              (
+                license_api.module_stderr
+                | default(license_api.msg)
+                | default('')
+              )
+            )
+            else 'api_error'
+          }}
+      when: license_api is failed
+
+    - name: Build per-controller summary
+      set_fact:
+        license_usage_summary:
+          controller: "{{ inventory_hostname }}"
+          host: "{{ ansible_host }}"
+          status: "{{ 'failed' if (license_query_failed | default(false)) else 'ok' }}"
+          endpoint: "{{ license_endpoint | default('n/a') }}"
+          consumed_service_cores: >-
+            {{
+              (license_api.obj.consumed_service_cores | default(''))
+              if not (license_query_failed | default(false))
+              else ''
+            }}
+          licensed_service_cores: >-
+            {{
+              (license_api.obj.licensed_service_cores | default(''))
+              if not (license_query_failed | default(false))
+              else ''
+            }}
+          se_units_consumed: >-
+            {{
+              (license_api.obj.se_units_consumed | default(''))
+              if not (license_query_failed | default(false))
+              else ''
+            }}
+          error: "{{ license_query_error | default('') }}"
+
+    - name: Ensure reports directory exists
+      run_once: true
+      delegate_to: localhost
+      file:
+        path: reports
+        state: directory
+        mode: "0755"
+
+    - name: Write JSON report
+      run_once: true
+      delegate_to: localhost
+      copy:
+        dest: reports/license_usage_report.json
+        mode: "0644"
+        content: |
+          [
+          {% for host in groups['avi_controllers'] %}
+            {{ hostvars[host].license_usage_summary | to_nice_json }}{% if not loop.last %},{% endif %}
+          {% endfor %}
+          ]
+
+    - name: Write CSV report
+      run_once: true
+      delegate_to: localhost
+      copy:
+        dest: reports/license_usage_report.csv
+        mode: "0644"
+        content: |
+          controller,host,status,endpoint,consumed_service_cores,licensed_service_cores,se_units_consumed,error
+          {% for host in groups['avi_controllers'] %}
+          "{{ hostvars[host].license_usage_summary.controller | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.host | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.status | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.endpoint | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.consumed_service_cores | string | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.licensed_service_cores | string | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.se_units_consumed | string | replace('"', '""') }}","{{ hostvars[host].license_usage_summary.error | string | replace('"', '""') }}"
+          {% endfor %}
+
+    - name: Print compact run summary
+      run_once: true
+      delegate_to: localhost
+      debug:
+        msg:
+          report_json: "reports/license_usage_report.json"
+          report_csv: "reports/license_usage_report.csv"
+          total_controllers: "{{ groups['avi_controllers'] | length }}"
+          successful_controllers: >-
+            {{
+              groups['avi_controllers']
+              | map('extract', hostvars, 'license_usage_summary')
+              | selectattr('status', 'equalto', 'ok')
+              | list
+              | length
+            }}
+          failed_controllers: >-
+            {{
+              groups['avi_controllers']
+              | map('extract', hostvars, 'license_usage_summary')
+              | selectattr('status', 'equalto', 'failed')
+              | map(attribute='controller')
+              | list
+            }}

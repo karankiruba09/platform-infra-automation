@@ -1,0 +1,4 @@
+---
+# Create an encrypted copy named vault.yml:
+# ansible-vault encrypt vault.yml
+vault_avi_password: "REPLACE_ME"

@@ -16,9 +16,80 @@ bun.lockb
 .env
 .env.local
 .env.*.local
+*.env
+*.env.local
 *.pem
 *.key
+*.p12
+*.pfx
+*.crt
+*.cer
 *.local.yml
+*.local.yaml
+*.secret
+*.secrets
+*.credentials
+*.creds
+*.tfvars
+*.tfvars.json
+
+# Recursive local secrets and credential files
+**/.env
+**/.env.local
+**/.env.*.local
+**/inventory.ini
+**/inventory.yml
+**/inventory.yaml
+**/hosts.ini
+**/hosts.yml
+**/hosts.yaml
+**/vault.yml
+**/vault.yaml
+**/.vault_pass
+**/vault_pass.txt
+**/*.vault_pass
+**/*password*.env
+**/*password*.txt
+**/*password*.yaml
+**/*password*.yml
+**/*password*.json
+**/*password*.ini
+**/*secret*.env
+**/*secret*.txt
+**/*secret*.yaml
+**/*secret*.yml
+**/*secret*.json
+**/*secret*.ini
+**/*credential*.env
+**/*credential*.txt
+**/*credential*.yaml
+**/*credential*.yml
+**/*credential*.json
+**/*credential*.ini
+
+# Local config directories: track examples/templates, ignore real local config
+**/config/*
+!**/config/*.example
+!**/config/*.example.*
+!**/config/**/*.example
+!**/config/**/*.example.*
+
+# Sensitive input directories: track templates/examples, ignore live data
+**/inputs/*.env
+**/inputs/*.yaml
+**/inputs/*.yml
+**/inputs/*.json
+**/inputs/*.ini
+**/inputs/*.txt
+!**/inputs/*.example.yaml
+!**/inputs/*.example.yml
+!**/inputs/*.example.json
+!**/inputs/*.example.ini
+!**/inputs/*.example.txt
+!**/inputs/*.env.example
+!**/inputs/*.j2
+!**/inputs/*catalog*.yaml
+!**/inputs/*catalog*.yml
 
 # --- Operating System files ---
 # macOS system files
@@ -41,6 +112,11 @@ obj/
 reports/
 .venv/
 venv/
+tmp/
+**/tmp/
+__pycache__/
+**/__pycache__/
+*.pyc
 
 # Logs
 npm-debug.log*
@@ -53,3 +129,10 @@ yarn-error.log*
 vault_pass.txt
 *.vault_pass
 vault.yml
+
+# Generated artifacts
+**/artifacts/*
+!**/artifacts/.gitkeep
+**/public/*.csv
+**/public/*.json
+**/public/report*.html
