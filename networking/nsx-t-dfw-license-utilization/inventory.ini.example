@@ -1,0 +1,4 @@
+[nsx_managers]
+nsx-manager-01.example.local
+nsx-manager-02.example.local
+nsx-manager-03.example.local

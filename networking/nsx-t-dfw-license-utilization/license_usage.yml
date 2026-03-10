@@ -1,0 +1,184 @@
+---
+- name: Fetch NSX-T DFW license utilization
+  hosts: nsx_managers
+  gather_facts: false
+  connection: local
+
+  vars_files:
+    - vars.yml
+    - vault.yml
+
+  vars:
+    nsx_api_base: "https://{{ inventory_hostname }}/api/v1"
+
+  tasks:
+    - name: Query NSX feature license usage
+      ansible.builtin.uri:
+        url: "{{ nsx_api_base }}/licenses/licenses-usage"
+        method: GET
+        url_username: "{{ nsx_username }}"
+        url_password: "{{ vault_nsx_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ nsx_validate_certs }}"
+        status_code: 200
+      register: nsx_feature_usage_rsp
+      ignore_errors: true
+
+    - name: Record API query failure
+      ansible.builtin.set_fact:
+        nsx_license_query_failed: true
+        nsx_license_query_error: >-
+          {{
+            'invalid_credentials'
+            if '401' in (
+              nsx_feature_usage_rsp.msg
+              | default('')
+            )
+            else 'api_error'
+          }}
+      when: nsx_feature_usage_rsp is failed
+
+    - name: Select DFW feature usage entry
+      ansible.builtin.set_fact:
+        nsx_dfw_feature_usage: >-
+          {{
+            (
+              nsx_feature_usage_rsp.json.feature_usage_info
+              | selectattr('feature', 'equalto', 'DFW')
+              | list
+              | first
+            )
+          }}
+      when: not (nsx_feature_usage_rsp is failed)
+
+    - name: Build per-manager summary
+      ansible.builtin.set_fact:
+        nsx_dfw_license_summary:
+          manager: "{{ inventory_hostname }}"
+          status: "{{ 'failed' if (nsx_license_query_failed | default(false)) else 'ok' }}"
+          endpoint: "/api/v1/licenses/licenses-usage"
+          feature: "DFW"
+          vm_usage_count: >-
+            {{
+              (
+                nsx_dfw_feature_usage.capacity_usage
+                | selectattr('capacity_type', 'equalto', 'VM')
+                | map(attribute='usage_count')
+                | list
+                | first
+                | default('')
+              )
+              if not (nsx_license_query_failed | default(false))
+              else ''
+            }}
+          cpu_usage_count: >-
+            {{
+              (
+                nsx_dfw_feature_usage.capacity_usage
+                | selectattr('capacity_type', 'equalto', 'CPU')
+                | map(attribute='usage_count')
+                | list
+                | first
+                | default('')
+              )
+              if not (nsx_license_query_failed | default(false))
+              else ''
+            }}
+          ccu_usage_count: >-
+            {{
+              (
+                nsx_dfw_feature_usage.capacity_usage
+                | selectattr('capacity_type', 'equalto', 'USER')
+                | map(attribute='usage_count')
+                | list
+                | first
+                | default('')
+              )
+              if not (nsx_license_query_failed | default(false))
+              else ''
+            }}
+          vcpu_usage_count: >-
+            {{
+              (
+                nsx_dfw_feature_usage.capacity_usage
+                | selectattr('capacity_type', 'equalto', 'vCPU')
+                | map(attribute='usage_count')
+                | list
+                | first
+                | default('')
+              )
+              if not (nsx_license_query_failed | default(false))
+              else ''
+            }}
+          core_usage_count: >-
+            {{
+              (
+                nsx_dfw_feature_usage.capacity_usage
+                | selectattr('capacity_type', 'equalto', 'CORE')
+                | map(attribute='usage_count')
+                | list
+                | first
+                | default('')
+              )
+              if not (nsx_license_query_failed | default(false))
+              else ''
+            }}
+          error: "{{ nsx_license_query_error | default('') }}"
+
+    - name: Ensure reports directory exists
+      run_once: true
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: reports
+        state: directory
+        mode: "0755"
+
+    - name: Write JSON report
+      run_once: true
+      delegate_to: localhost
+      ansible.builtin.copy:
+        dest: reports/license_usage_report.json
+        mode: "0644"
+        content: |
+          [
+          {% for host in groups['nsx_managers'] %}
+            {{ hostvars[host].nsx_dfw_license_summary | to_nice_json }}{% if not loop.last %},{% endif %}
+          {% endfor %}
+          ]
+
+    - name: Write CSV report
+      run_once: true
+      delegate_to: localhost
+      ansible.builtin.copy:
+        dest: reports/license_usage_report.csv
+        mode: "0644"
+        content: |
+          manager,status,endpoint,feature,vm_usage_count,cpu_usage_count,ccu_usage_count,vcpu_usage_count,core_usage_count,error
+          {% for host in groups['nsx_managers'] %}
+          "{{ hostvars[host].nsx_dfw_license_summary.manager | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.status | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.endpoint | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.feature | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.vm_usage_count | string | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.cpu_usage_count | string | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.ccu_usage_count | string | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.vcpu_usage_count | string | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.core_usage_count | string | replace('"', '""') }}","{{ hostvars[host].nsx_dfw_license_summary.error | string | replace('"', '""') }}"
+          {% endfor %}
+
+    - name: Print compact run summary
+      run_once: true
+      delegate_to: localhost
+      ansible.builtin.debug:
+        msg:
+          report_json: "reports/license_usage_report.json"
+          report_csv: "reports/license_usage_report.csv"
+          total_managers: "{{ groups['nsx_managers'] | length }}"
+          successful_managers: >-
+            {{
+              groups['nsx_managers']
+              | map('extract', hostvars, 'nsx_dfw_license_summary')
+              | selectattr('status', 'equalto', 'ok')
+              | list
+              | length
+            }}
+          failed_managers: >-
+            {{
+              groups['nsx_managers']
+              | map('extract', hostvars, 'nsx_dfw_license_summary')
+              | selectattr('status', 'equalto', 'failed')
+              | map(attribute='manager')
+              | list
+            }}

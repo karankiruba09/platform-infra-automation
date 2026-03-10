@@ -1,0 +1,3 @@
+---
+nsx_username: admin
+nsx_validate_certs: false
