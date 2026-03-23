@@ -24,7 +24,7 @@
     "waitForIPSeconds": 1800,
     "logDir": "logs",
     "logLevel": "verbose",
-    "workerCount": 4,
+    "workerCount": 9,
     "timeoutMinutes": 90,
     "extraArgs": []
   },
