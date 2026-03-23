@@ -1,8 +1,0 @@
-# Actual deploy configs contain credentials and site-specific data
-deploy.json
-
-# Deployment logs
-logs/
-
-# Compiled binary
-bin/
