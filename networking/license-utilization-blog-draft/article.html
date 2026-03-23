@@ -1,0 +1,156 @@
+<article>
+  <p>If the goal is to answer <em>"how much of my Avi and NSX-T DFW licensing is actually being used?"</em>, the fastest approach is to automate both collections and keep the output in machine-readable files. This post shows exactly how to do that with the Ansible content in this repo.</p>
+
+  <h2>What This Covers</h2>
+  <p>The repo already contains two small automation bundles:</p>
+  <ul>
+    <li><strong>Avi license utilization</strong>: queries each Avi controller for <code>licenseusage</code>.</li>
+    <li><strong>NSX-T DFW license utilization</strong>: queries each NSX manager at <code>GET /api/v1/licenses/licenses-usage</code> and extracts the <code>DFW</code> feature row.</li>
+  </ul>
+
+  <p>Both playbooks produce the same two report formats:</p>
+  <ul>
+    <li><code>reports/license_usage_report.json</code></li>
+    <li><code>reports/license_usage_report.csv</code></li>
+  </ul>
+
+  <h2>Prerequisites</h2>
+  <ul>
+    <li>Ansible installed on the host where you will run the playbooks.</li>
+    <li>Reachability from that host to your Avi controllers and NSX managers.</li>
+    <li>Credentials for Avi and NSX-T.</li>
+    <li><code>ansible-vault</code> available so passwords are not stored in plaintext.</li>
+  </ul>
+
+  <p>The Avi playbook uses the <code>community.network</code> collection path already referenced in the project. The NSX-T playbook uses Ansible's built-in <code>uri</code> module, so there is no separate NSX SDK requirement for the basic report.</p>
+
+  <h2>1. Generate the Avi License Report</h2>
+  <p>Work from:</p>
+  <pre><code>networking/avi-license-utilization</code></pre>
+
+  <p>Start by creating your local inventory and encrypted vault file:</p>
+  <pre><code class="language-bash">cp inventory.ini.example inventory.ini
+cp vault.yml.example vault.yml
+ansible-vault encrypt vault.yml
+ansible-vault edit vault.yml</code></pre>
+
+  <p>Set the Avi password in the vault file:</p>
+  <pre><code class="language-yaml">vault_avi_password: your-avi-password</code></pre>
+
+  <p>The non-secret username is already kept in <code>vars.yml</code>:</p>
+  <pre><code class="language-yaml">avi_username: admin</code></pre>
+
+  <p>Populate <code>inventory.ini</code> with your Avi controllers under the <code>[avi_controllers]</code> group:</p>
+  <pre><code class="language-ini">[avi_controllers]
+avi-controller-01.example.local
+avi-controller-02.example.local
+avi-controller-03.example.local</code></pre>
+
+  <p>Run the collection:</p>
+  <pre><code class="language-bash">ansible-playbook -i inventory.ini license_usage.yml --ask-vault-pass</code></pre>
+
+  <p>The Avi playbook queries the <code>licenseusage</code> endpoint on each controller and writes a per-controller summary with these fields:</p>
+  <ul>
+    <li><code>controller</code></li>
+    <li><code>host</code></li>
+    <li><code>status</code></li>
+    <li><code>endpoint</code></li>
+    <li><code>consumed_service_cores</code></li>
+    <li><code>licensed_service_cores</code></li>
+    <li><code>se_units_consumed</code></li>
+    <li><code>error</code></li>
+  </ul>
+
+  <p>If a controller cannot be queried, the playbook still records the failure and marks the row with <code>status: failed</code>. That makes the report safer to automate because one bad endpoint does not kill the whole run.</p>
+
+  <h2>2. Generate the NSX-T DFW License Report</h2>
+  <p>Work from:</p>
+  <pre><code>networking/nsx-t-dfw-license-utilization</code></pre>
+
+  <p>Create the local files the same way:</p>
+  <pre><code class="language-bash">cp inventory.ini.example inventory.ini
+cp vault.yml.example vault.yml
+ansible-vault encrypt vault.yml
+ansible-vault edit vault.yml</code></pre>
+
+  <p>Set the NSX password in the vault:</p>
+  <pre><code class="language-yaml">vault_nsx_password: your-nsx-password</code></pre>
+
+  <p>The local variable file already defines the basic connection behavior:</p>
+  <pre><code class="language-yaml">nsx_username: admin
+nsx_validate_certs: false</code></pre>
+
+  <p>Populate <code>inventory.ini</code> with your managers under <code>[nsx_managers]</code>:</p>
+  <pre><code class="language-ini">[nsx_managers]
+nsx-manager-01.example.local
+nsx-manager-02.example.local
+nsx-manager-03.example.local</code></pre>
+
+  <p>Run the collector:</p>
+  <pre><code class="language-bash">ansible-playbook -i inventory.ini license_usage.yml --ask-vault-pass</code></pre>
+
+  <p>This playbook calls:</p>
+  <pre><code>GET /api/v1/licenses/licenses-usage</code></pre>
+
+  <p>It then selects only the <code>DFW</code> feature entry and writes these fields into the report:</p>
+  <ul>
+    <li><code>manager</code></li>
+    <li><code>status</code></li>
+    <li><code>endpoint</code></li>
+    <li><code>feature</code></li>
+    <li><code>vm_usage_count</code></li>
+    <li><code>cpu_usage_count</code></li>
+    <li><code>ccu_usage_count</code></li>
+    <li><code>vcpu_usage_count</code></li>
+    <li><code>core_usage_count</code></li>
+    <li><code>error</code></li>
+  </ul>
+
+  <h2>3. Where the Reports Land</h2>
+  <p>After each playbook run, look in the local <code>reports</code> directory. You will get both JSON and CSV versions of the same dataset.</p>
+
+  <p>That split is useful:</p>
+  <ul>
+    <li>Use <strong>JSON</strong> if you want to feed the output into other automation, dashboards, or a small parser.</li>
+    <li>Use <strong>CSV</strong> if you want a quick spreadsheet-style view for operations or license review meetings.</li>
+  </ul>
+
+  <h2>4. How to Combine Both Views</h2>
+  <p>I would not merge the raw files into one mixed schema. Avi and NSX-T DFW are measuring different things, so forcing them into one table adds noise. A better approach is:</p>
+  <ol>
+    <li>Run the Avi collector.</li>
+    <li>Run the NSX-T DFW collector.</li>
+    <li>Keep each raw report intact.</li>
+    <li>Build a small summary layer above them for human review.</li>
+  </ol>
+
+  <p>For example:</p>
+  <ul>
+    <li>Avi gives you service core consumption versus licensed service cores.</li>
+    <li>NSX-T DFW gives you protected footprint by VM, CPU, CCU, vCPU, and CORE usage counts.</li>
+  </ul>
+
+  <p>That is enough to answer two different planning questions from one reporting cycle: <em>how much load-balancing capacity is being consumed</em> and <em>how large the firewall-protected estate is</em>.</p>
+
+  <h2>5. What a Real Run Looked Like</h2>
+  <p>Using the latest local report artifacts available when writing this post:</p>
+  <ul>
+    <li>The Avi report was generated on <strong>March 9, 2026</strong> and returned 9 successful controllers out of 10, with one authentication failure.</li>
+    <li>The NSX-T DFW report was generated on <strong>March 10, 2026</strong> and returned 10 successful managers out of 10.</li>
+  </ul>
+
+  <p>That is exactly why the playbooks record status and error fields instead of assuming every API call will succeed. In practical operations, partial success with clean error reporting is better than a fragile all-or-nothing script.</p>
+
+  <h2>6. Why This Pattern Works</h2>
+  <p>The useful part is not just the API call. It is the full workflow:</p>
+  <ul>
+    <li>Inventory is local and simple.</li>
+    <li>Secrets live in Ansible Vault.</li>
+    <li>Each run creates JSON and CSV outputs.</li>
+    <li>Failures are preserved in the report instead of hidden.</li>
+    <li>The structure is small enough to schedule later with cron, AWX, or another runner.</li>
+  </ul>
+
+  <h2>Closing</h2>
+  <p>If you need a quick, maintainable way to report both Avi license consumption and NSX-T DFW license usage, these two directories are already enough. Start by running each playbook independently, validate the JSON and CSV output, and then build your summary or dashboard on top of those files rather than inside the collection logic.</p>
+</article>

@@ -1,0 +1,610 @@
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "errors"
+    "flag"
+    "fmt"
+    "net/url"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "sync"
+    "time"
+)
+
+type CommonConfig struct {
+    OvfToolPath       string            `json:"ovfToolPath"`
+    OvaPath           string            `json:"ovaPath"`
+    Username          string            `json:"username"`
+    VCenterPassword   string            `json:"vcenterPassword"`
+    VCenterPasswordEnv string           `json:"vcenterPasswordEnv"`
+    Datastore         string            `json:"datastore"`
+    Cluster           string            `json:"cluster"`
+    VMFolder          string            `json:"vmFolder"`
+    NetworkMappings   map[string]string `json:"networkMappings"`
+    DiskMode          string            `json:"diskMode"`
+    DeploymentOption  string            `json:"deploymentOption"`
+    DNSList           []string          `json:"dnsList"`
+    NTPList           []string          `json:"ntpList"`
+    MgrCliPassword    string            `json:"mgrCliPassword"`
+    MgrCliPasswordEnv string            `json:"mgrCliPasswordEnv"`
+    MgrRootPassword   string            `json:"mgrRootPassword"`
+    MgrRootPasswordEnv string           `json:"mgrRootPasswordEnv"`
+    TcaUserPassword   string            `json:"tcaUserPassword"`
+    TcaUserPasswordEnv string           `json:"tcaUserPasswordEnv"`
+    SSHEnabled        bool              `json:"sshEnabled"`
+    ServiceWFH        bool              `json:"serviceWFH"`
+    ApplianceRole     string            `json:"applianceRole"`
+    IPProtocol        string            `json:"ipProtocol"`
+    WaitForIPSeconds  int               `json:"waitForIPSeconds"`
+    LogDir            string            `json:"logDir"`
+    LogLevel          string            `json:"logLevel"`
+    WorkerCount       int               `json:"workerCount"`
+    TimeoutMinutes    int               `json:"timeoutMinutes"`
+    ExtraArgs         []string          `json:"extraArgs"`
+}
+
+type SiteConfig struct {
+    ID                string            `json:"id"`
+    Name              string            `json:"name"`
+    Hostname          string            `json:"hostname"`
+    ExternalAddress   string            `json:"externalAddress"`
+    IP                string            `json:"ip"`
+    Prefix            string            `json:"prefix"`
+    Gateway           string            `json:"gateway"`
+    VCenterHost       string            `json:"vcenterHost"`
+    Datacenter        string            `json:"datacenter"`
+    Username          string            `json:"username"`
+    VCenterPassword   string            `json:"vcenterPassword"`
+    VCenterPasswordEnv string           `json:"vcenterPasswordEnv"`
+    Datastore         string            `json:"datastore"`
+    Cluster           string            `json:"cluster"`
+    VMFolder          string            `json:"vmFolder"`
+    NetworkMappings   map[string]string `json:"networkMappings"`
+    DiskMode          string            `json:"diskMode"`
+    DeploymentOption  string            `json:"deploymentOption"`
+    DNSList           []string          `json:"dnsList"`
+    NTPList           []string          `json:"ntpList"`
+    OvfToolPath       string            `json:"ovfToolPath"`
+    OvaPath           string            `json:"ovaPath"`
+    MgrCliPassword    string            `json:"mgrCliPassword"`
+    MgrCliPasswordEnv string            `json:"mgrCliPasswordEnv"`
+    MgrRootPassword   string            `json:"mgrRootPassword"`
+    MgrRootPasswordEnv string           `json:"mgrRootPasswordEnv"`
+    TcaUserPassword   string            `json:"tcaUserPassword"`
+    TcaUserPasswordEnv string           `json:"tcaUserPasswordEnv"`
+    SSHEnabled        *bool             `json:"sshEnabled"`
+    ServiceWFH        *bool             `json:"serviceWFH"`
+    ApplianceRole     string            `json:"applianceRole"`
+    IPProtocol        string            `json:"ipProtocol"`
+    WaitForIPSeconds  int               `json:"waitForIPSeconds"`
+    TimeoutMinutes    int               `json:"timeoutMinutes"`
+    ExtraArgs         []string          `json:"extraArgs"`
+    LogDir            string            `json:"logDir"`
+    LogLevel          string            `json:"logLevel"`
+}
+
+type Config struct {
+    Common CommonConfig `json:"common"`
+    Sites  []SiteConfig `json:"sites"`
+}
+
+type DeployResult struct {
+    Site string
+    Err  error
+}
+
+func main() {
+    configPath := flag.String("config", "deploy.json", "Path to JSON config file")
+    sitesFlag := flag.String("sites", "", "Comma separated site IDs to deploy; default all")
+    dryRun := flag.Bool("dry-run", false, "Print commands without running ovftool")
+    workerOverride := flag.Int("workers", 0, "Override worker count from config")
+    flag.Parse()
+
+    cfg, err := loadConfig(*configPath)
+    if err != nil {
+        exitWithErr(err)
+    }
+
+    if *workerOverride > 0 {
+        cfg.Common.WorkerCount = *workerOverride
+    }
+
+    requestedSites := parseList(*sitesFlag)
+    sites, err := filterSites(cfg.Sites, requestedSites)
+    if err != nil {
+        exitWithErr(err)
+    }
+
+    if cfg.Common.WorkerCount <= 0 {
+        if len(sites) < 4 {
+            cfg.Common.WorkerCount = len(sites)
+        } else {
+            cfg.Common.WorkerCount = 4
+        }
+    }
+
+    if cfg.Common.WorkerCount <= 0 {
+        cfg.Common.WorkerCount = 1
+    }
+
+    logDir := cfg.Common.LogDir
+    if logDir == "" {
+        logDir = "logs"
+    }
+    if err := os.MkdirAll(logDir, 0o755); err != nil {
+        exitWithErr(fmt.Errorf("failed to create log directory %s: %w", logDir, err))
+    }
+
+    fmt.Printf("Deploying %d site(s) with %d worker(s)\n", len(sites), cfg.Common.WorkerCount)
+
+    jobs := make(chan SiteConfig)
+    results := make(chan DeployResult, len(sites))
+
+    var wg sync.WaitGroup
+    for i := 0; i < cfg.Common.WorkerCount; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for site := range jobs {
+                err := deploySite(cfg.Common, site, logDir, *dryRun)
+                results <- DeployResult{Site: site.ID, Err: err}
+            }
+        }()
+    }
+
+    for _, s := range sites {
+        jobs <- s
+    }
+    close(jobs)
+
+    wg.Wait()
+    close(results)
+
+    fmt.Println("\nDeployment summary")
+    failed := false
+    for r := range results {
+        if r.Err != nil {
+            failed = true
+            fmt.Printf("FAILED  %s  %v\n", r.Site, r.Err)
+        } else {
+            fmt.Printf("SUCCESS %s\n", r.Site)
+        }
+    }
+
+    if failed {
+        os.Exit(1)
+    }
+}
+
+func loadConfig(path string) (Config, error) {
+    var cfg Config
+
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return cfg, fmt.Errorf("read config: %w", err)
+    }
+
+    if err := json.Unmarshal(data, &cfg); err != nil {
+        return cfg, fmt.Errorf("parse config: %w", err)
+    }
+
+    if err := validateConfig(cfg); err != nil {
+        return cfg, err
+    }
+    return cfg, nil
+}
+
+func validateConfig(cfg Config) error {
+    if cfg.Common.OvfToolPath == "" {
+        return errors.New("common.ovfToolPath is required")
+    }
+    if cfg.Common.OvaPath == "" {
+        return errors.New("common.ovaPath is required")
+    }
+    if cfg.Common.Username == "" {
+        return errors.New("common.username is required")
+    }
+    if cfg.Common.Datastore == "" {
+        return errors.New("common.datastore is required")
+    }
+    if cfg.Common.Cluster == "" {
+        return errors.New("common.cluster is required")
+    }
+    if cfg.Common.VMFolder == "" {
+        return errors.New("common.vmFolder is required")
+    }
+    if len(cfg.Common.NetworkMappings) == 0 {
+        return errors.New("common.networkMappings must include at least one entry (e.g. VSMgmt)")
+    }
+    if cfg.Common.DiskMode == "" {
+        return errors.New("common.diskMode is required")
+    }
+    if cfg.Common.DeploymentOption == "" {
+        return errors.New("common.deploymentOption is required")
+    }
+    if len(cfg.Common.DNSList) == 0 {
+        return errors.New("common.dnsList is required")
+    }
+    if len(cfg.Common.NTPList) == 0 {
+        return errors.New("common.ntpList is required")
+    }
+    if len(cfg.Sites) == 0 {
+        return errors.New("at least one site entry is required")
+    }
+
+    seen := map[string]bool{}
+    for _, s := range cfg.Sites {
+        if s.ID == "" {
+            return errors.New("site.id is required")
+        }
+        if seen[s.ID] {
+            return fmt.Errorf("duplicate site id: %s", s.ID)
+        }
+        seen[s.ID] = true
+
+        if s.Name == "" {
+            return fmt.Errorf("site %s missing name", s.ID)
+        }
+        if s.Hostname == "" {
+            return fmt.Errorf("site %s missing hostname", s.ID)
+        }
+        if s.ExternalAddress == "" {
+            return fmt.Errorf("site %s missing externalAddress", s.ID)
+        }
+        if s.IP == "" {
+            return fmt.Errorf("site %s missing ip", s.ID)
+        }
+        if s.Prefix == "" {
+            return fmt.Errorf("site %s missing prefix", s.ID)
+        }
+        if s.Gateway == "" {
+            return fmt.Errorf("site %s missing gateway", s.ID)
+        }
+        if s.VCenterHost == "" {
+            return fmt.Errorf("site %s missing vcenterHost", s.ID)
+        }
+        if s.Datacenter == "" {
+            return fmt.Errorf("site %s missing datacenter", s.ID)
+        }
+    }
+    return nil
+}
+
+func filterSites(all []SiteConfig, requested []string) ([]SiteConfig, error) {
+    if len(requested) == 0 {
+        return all, nil
+    }
+
+    index := make(map[string]SiteConfig, len(all))
+    for _, s := range all {
+        index[s.ID] = s
+    }
+
+    selected := make([]SiteConfig, 0, len(requested))
+    for _, id := range requested {
+        site, ok := index[id]
+        if !ok {
+            return nil, fmt.Errorf("requested site not found: %s", id)
+        }
+        selected = append(selected, site)
+    }
+    return selected, nil
+}
+
+func deploySite(common CommonConfig, site SiteConfig, baseLogDir string, dryRun bool) error {
+    merged := mergeSite(common, site)
+
+    ovftool := merged.OvfToolPath
+    if ovftool == "" {
+        return fmt.Errorf("site %s: ovfToolPath not resolved", site.ID)
+    }
+    if _, err := os.Stat(ovftool); err != nil {
+        return fmt.Errorf("site %s: ovftool not found at %s", site.ID, ovftool)
+    }
+
+    ovaPath := merged.OvaPath
+    if ovaPath == "" {
+        return fmt.Errorf("site %s: ovaPath not resolved", site.ID)
+    }
+    if !filepath.IsAbs(ovaPath) {
+        if abs, err := filepath.Abs(ovaPath); err == nil {
+            ovaPath = abs
+        }
+    }
+    if _, err := os.Stat(ovaPath); err != nil {
+        return fmt.Errorf("site %s: OVA not found at %s", site.ID, ovaPath)
+    }
+
+    vcPassword, err := secret("vCenter", merged.VCenterPasswordEnv, merged.VCenterPassword)
+    if err != nil {
+        return fmt.Errorf("site %s: %w", site.ID, err)
+    }
+    mgrCliPass, err := secret("mgrCliPassword", merged.MgrCliPasswordEnv, merged.MgrCliPassword)
+    if err != nil {
+        return fmt.Errorf("site %s: %w", site.ID, err)
+    }
+    mgrRootPass, err := secret("mgrRootPassword", merged.MgrRootPasswordEnv, merged.MgrRootPassword)
+    if err != nil {
+        return fmt.Errorf("site %s: %w", site.ID, err)
+    }
+    tcaUserPass, err := secret("tcaUserPassword", merged.TcaUserPasswordEnv, merged.TcaUserPassword)
+    if err != nil {
+        return fmt.Errorf("site %s: %w", site.ID, err)
+    }
+
+    targetURL := buildVCenterURL(merged.Username, vcPassword, merged.VCenterHost, merged.Datacenter, merged.Cluster)
+
+    logRoot := baseLogDir
+    if merged.LogDir != "" {
+        logRoot = merged.LogDir
+    }
+    if logRoot == "" {
+        logRoot = "logs"
+    }
+
+    siteLogDir := filepath.Join(logRoot, sanitize(site.ID))
+    if err := os.MkdirAll(siteLogDir, 0o755); err != nil {
+        return fmt.Errorf("site %s: create log dir: %w", site.ID, err)
+    }
+
+    logFile := filepath.Join(siteLogDir, "ovf_deployment.log")
+    stdoutPath := filepath.Join(siteLogDir, "ovf_stdout.log")
+    stderrPath := filepath.Join(siteLogDir, "ovf_stderr.log")
+
+    args := buildArgs(merged, ovaPath, targetURL, logFile, mgrCliPass, mgrRootPass, tcaUserPass)
+
+    if dryRun {
+        fmt.Printf("[DRY RUN] %s -> %s\n", site.ID, maskSecrets(ovftool, args, vcPassword, mgrCliPass, mgrRootPass, tcaUserPass))
+        return nil
+    }
+
+    if err := runOvftool(ovftool, args, stdoutPath, stderrPath, merged.TimeoutMinutes); err != nil {
+        return fmt.Errorf("site %s: %w", site.ID, err)
+    }
+
+    fmt.Printf("Completed %s (logs: %s)\n", site.ID, siteLogDir)
+    return nil
+}
+
+func mergeSite(common CommonConfig, site SiteConfig) SiteConfig {
+    merged := site
+
+    merged.OvfToolPath = firstNonEmpty(site.OvfToolPath, common.OvfToolPath)
+    merged.OvaPath = firstNonEmpty(site.OvaPath, common.OvaPath)
+    merged.Username = firstNonEmpty(site.Username, common.Username)
+    merged.Datastore = firstNonEmpty(site.Datastore, common.Datastore)
+    merged.Cluster = firstNonEmpty(site.Cluster, common.Cluster)
+    merged.VMFolder = firstNonEmpty(site.VMFolder, common.VMFolder)
+    merged.DiskMode = firstNonEmpty(site.DiskMode, common.DiskMode)
+    merged.DeploymentOption = firstNonEmpty(site.DeploymentOption, common.DeploymentOption)
+
+    if len(merged.DNSList) == 0 {
+        merged.DNSList = common.DNSList
+    }
+    if len(merged.NTPList) == 0 {
+        merged.NTPList = common.NTPList
+    }
+    if len(merged.NetworkMappings) == 0 {
+        merged.NetworkMappings = common.NetworkMappings
+    }
+    if merged.SSHEnabled == nil {
+        merged.SSHEnabled = ptrBool(common.SSHEnabled)
+    }
+    if merged.ServiceWFH == nil {
+        merged.ServiceWFH = ptrBool(common.ServiceWFH)
+    }
+    merged.ApplianceRole = firstNonEmpty(site.ApplianceRole, common.ApplianceRole)
+    merged.IPProtocol = firstNonEmpty(site.IPProtocol, common.IPProtocol)
+    merged.WaitForIPSeconds = fallbackInt(site.WaitForIPSeconds, common.WaitForIPSeconds, 0)
+    merged.TimeoutMinutes = fallbackInt(site.TimeoutMinutes, common.TimeoutMinutes, 60)
+    merged.ExtraArgs = append(common.ExtraArgs, site.ExtraArgs...)
+
+    merged.MgrCliPassword = firstNonEmpty(site.MgrCliPassword, common.MgrCliPassword)
+    merged.MgrCliPasswordEnv = firstNonEmpty(site.MgrCliPasswordEnv, common.MgrCliPasswordEnv)
+    merged.MgrRootPassword = firstNonEmpty(site.MgrRootPassword, common.MgrRootPassword)
+    merged.MgrRootPasswordEnv = firstNonEmpty(site.MgrRootPasswordEnv, common.MgrRootPasswordEnv)
+    merged.TcaUserPassword = firstNonEmpty(site.TcaUserPassword, common.TcaUserPassword)
+    merged.TcaUserPasswordEnv = firstNonEmpty(site.TcaUserPasswordEnv, common.TcaUserPasswordEnv)
+
+    merged.VCenterPassword = firstNonEmpty(site.VCenterPassword, common.VCenterPassword)
+    merged.VCenterPasswordEnv = firstNonEmpty(site.VCenterPasswordEnv, common.VCenterPasswordEnv)
+
+    if merged.IPProtocol == "" {
+        merged.IPProtocol = "IPv4"
+    }
+    if merged.ApplianceRole == "" {
+        merged.ApplianceRole = "ControlPlane"
+    }
+    if merged.WaitForIPSeconds == 0 {
+        merged.WaitForIPSeconds = 1800
+    }
+    if merged.LogDir == "" {
+        merged.LogDir = common.LogDir
+    }
+    if merged.LogLevel == "" {
+        merged.LogLevel = common.LogLevel
+    }
+
+    return merged
+}
+
+func buildArgs(cfg SiteConfig, ovaPath, targetURL, logFile, mgrCliPass, mgrRootPass, tcaUserPass string) []string {
+    args := []string{
+        "--acceptAllEulas",
+        "--noSSLVerify",
+        "--disableVerification",
+        "--allowExtraConfig",
+        "--X:enableHiddenProperties",
+        "--X:injectOvfEnv",
+        "--X:waitForIp",
+        fmt.Sprintf("--X:waitForIp:timeout=%ds", cfg.WaitForIPSeconds),
+        "--X:logFile=" + logFile,
+        "--X:logLevel=" + firstNonEmpty(cfg.LogLevel, "verbose"),
+        "--name=" + cfg.Name,
+        "--datastore=" + cfg.Datastore,
+        "--vmFolder=" + cfg.VMFolder,
+        "--diskMode=" + cfg.DiskMode,
+        "--deploymentOption=" + cfg.DeploymentOption,
+        "--prop:mgr_ip_protocol=" + cfg.IPProtocol,
+        "--prop:mgr_ip_0=" + cfg.IP,
+        "--prop:mgr_prefix_ip_0=" + cfg.Prefix,
+        "--prop:mgr_gateway_0=" + cfg.Gateway,
+        "--prop:mgr_dns_list=" + strings.Join(cfg.DNSList, ","),
+        "--prop:mgr_ntp_list=" + strings.Join(cfg.NTPList, ","),
+        "--prop:mgr_cli_passwd=" + mgrCliPass,
+        "--prop:mgr_root_passwd=" + mgrRootPass,
+        "--prop:tca_user_passwd=" + tcaUserPass,
+        "--prop:externalAddress=" + cfg.ExternalAddress,
+        "--prop:mgr_isSSHEnabled=" + boolToString(cfg.SSHEnabled),
+        "--prop:hostname=" + cfg.Hostname,
+        "--prop:service_wfh=" + boolToString(cfg.ServiceWFH),
+        "--prop:applianceRole=" + cfg.ApplianceRole,
+    }
+
+    for key, netName := range cfg.NetworkMappings {
+        args = append(args, fmt.Sprintf("--net:%s=%s", key, netName))
+    }
+
+    args = append(args, cfg.ExtraArgs...)
+    args = append(args, ovaPath, targetURL)
+    return args
+}
+
+func runOvftool(binary string, args []string, stdoutPath, stderrPath string, timeoutMinutes int) error {
+    stdoutFile, err := os.Create(stdoutPath)
+    if err != nil {
+        return fmt.Errorf("create stdout log: %w", err)
+    }
+    defer stdoutFile.Close()
+
+    stderrFile, err := os.Create(stderrPath)
+    if err != nil {
+        return fmt.Errorf("create stderr log: %w", err)
+    }
+    defer stderrFile.Close()
+
+    ctx := context.Background()
+    if timeoutMinutes > 0 {
+        var cancel context.CancelFunc
+        ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMinutes)*time.Minute)
+        defer cancel()
+    }
+
+    cmd := exec.CommandContext(ctx, binary, args...)
+    cmd.Stdout = stdoutFile
+    cmd.Stderr = stderrFile
+
+    if err := cmd.Run(); err != nil {
+        if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+            return fmt.Errorf("ovftool timed out after %d minute(s)", timeoutMinutes)
+        }
+        return fmt.Errorf("ovftool error: %w", err)
+    }
+    return nil
+}
+
+func buildVCenterURL(user, password, host, datacenter, cluster string) string {
+    u := &url.URL{
+        Scheme: "vi",
+        User:   url.UserPassword(user, password),
+        Host:   host,
+        Path:   fmt.Sprintf("/%s/host/%s", url.PathEscape(datacenter), url.PathEscape(cluster)),
+    }
+    return u.String()
+}
+
+func secret(label, envName, inline string) (string, error) {
+    if envName != "" {
+        if val := os.Getenv(envName); val != "" {
+            return val, nil
+        }
+    }
+    if inline != "" {
+        return inline, nil
+    }
+    return "", fmt.Errorf("missing %s (set env %s or provide inline value)", label, envName)
+}
+
+func boolToString(b *bool) string {
+    if b == nil {
+        return "False"
+    }
+    if *b {
+        return "True"
+    }
+    return "False"
+}
+
+func sanitize(s string) string {
+    replacer := strings.NewReplacer(
+        " ", "_",
+        "@", "_",
+        "/", "_",
+        "\\", "_",
+        ":", "_",
+    )
+    return replacer.Replace(s)
+}
+
+func firstNonEmpty(values ...string) string {
+    for _, v := range values {
+        if strings.TrimSpace(v) != "" {
+            return v
+        }
+    }
+    return ""
+}
+
+func parseList(csv string) []string {
+    if csv == "" {
+        return nil
+    }
+    parts := strings.Split(csv, ",")
+    out := make([]string, 0, len(parts))
+    for _, p := range parts {
+        p = strings.TrimSpace(p)
+        if p != "" {
+            out = append(out, p)
+        }
+    }
+    return out
+}
+
+func ptrBool(b bool) *bool {
+    v := b
+    return &v
+}
+
+func fallbackInt(values ...int) int {
+    for _, v := range values {
+        if v > 0 {
+            return v
+        }
+    }
+    return 0
+}
+
+func maskSecrets(bin string, args []string, secrets ...string) string {
+    masked := make([]string, len(args))
+    for i, a := range args {
+        masked[i] = a
+        for _, sec := range secrets {
+            if sec == "" {
+                continue
+            }
+            if strings.Contains(masked[i], sec) {
+                masked[i] = strings.ReplaceAll(masked[i], sec, "********")
+            }
+        }
+    }
+    return bin + " " + strings.Join(masked, " ")
+}
+
+func exitWithErr(err error) {
+    fmt.Fprintf(os.Stderr, "%v\n", err)
+    os.Exit(1)
+}

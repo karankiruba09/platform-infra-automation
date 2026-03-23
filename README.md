@@ -14,3 +14,17 @@ This repository contains reusable tooling, templates, and automation patterns us
 - Safe, repeatable upgrades
 - Clear separation of platform and workload concerns
 - Reliability and observability driven
+
+## tca-tkg-precheck
+Single-run pre-upgrade health report CLI for VMware Telco Cloud Automation (TCA) and Tanzu Kubernetes Grid (TKG) clusters.
+
+Location: `kubernetes/tca-tkg-precheck`
+
+Docs: `kubernetes/tca-tkg-precheck/README.md`
+
+## Avi VirtualService Template Toolkit
+Compare two existing Avi Virtual Services to generate a reusable common template plus a variable-fill catalog, then deploy new VS instances with only the remaining values.
+
+Location: `networking/avi-virtualservice-templater-ansible`
+
+Docs: `networking/avi-virtualservice-templater-ansible/README.md`

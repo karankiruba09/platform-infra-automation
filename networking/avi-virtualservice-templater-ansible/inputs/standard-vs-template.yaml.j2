@@ -1,0 +1,204 @@
+{% set _pool_name = pool_name %}
+{% set _service_port = service_port | default(443) %}
+{% set _backend_server_port = backend_server_port | default(_service_port) %}
+{% set _cloud_ref = cloud_ref | default('CLOUD_NAME') %}
+{% set _vrf_ref = vrf_ref | default('VRF_NAME') %}
+{% set _vrf_context_ref = vrf_context_ref | default(_vrf_ref) %}
+{% set _health_monitor_name = health_monitor_name | default(virtual_service_name ~ '-hm') %}
+{% set _health_monitor_type = health_monitor_type | default('HEALTH_MONITOR_HTTPS') %}
+{% set _health_monitor_monitor_port = health_monitor_monitor_port | default(_backend_server_port) %}
+{% set _network_profile_ref = network_profile_ref | default('NETWORK_PROFILE_NAME') %}
+{% set _network_security_policy_ref = network_security_policy_ref %}
+{% set _se_group_ref = se_group_ref | default('SERVICE_ENGINE_GROUP_NAME') %}
+{% set _redis_db = redis_db | default(10) %}
+{% set _redis_port = redis_port | default(5023) %}
+{% set _vsvip_name = vsvip_name %}
+{% set _full_client_logs_duration = vs_analytics_full_client_logs_duration %}
+health_monitors:
+  - failed_checks: 1
+    is_federated: false
+{% if _health_monitor_type != 'HEALTH_MONITOR_EXTERNAL' %}
+    monitor_port: {{ _health_monitor_monitor_port }}
+{% endif %}
+    name: "{{ _health_monitor_name }}"
+    receive_timeout: 1
+    send_interval: 3
+    successful_checks: 3
+    type: "{{ _health_monitor_type }}"
+{% if _health_monitor_type == 'HEALTH_MONITOR_HTTPS' %}
+    https_monitor:
+      exact_http_request: false
+      http_request: "{{ health_monitor_https_http_request | default('GET / HTTP/1.0') }}"
+      http_response_code:
+        - HTTP_2XX
+{% if health_monitor_ssl_profile_ref is defined %}
+      ssl_attributes:
+        ssl_profile_ref: "{{ health_monitor_ssl_profile_ref }}"
+{% endif %}
+{% endif %}
+{% if _health_monitor_type == 'HEALTH_MONITOR_EXTERNAL' %}
+    external_monitor:
+      command_code: |
+{{ health_monitor_external_command_code | default('#!/bin/bash\nexit 0') | indent(8, true) }}
+      command_variables: "{{ health_monitor_external_command_variables | default('') }}"
+{% endif %}
+
+ssl_profiles: []
+
+pool:
+  analytics_policy:
+    enable_realtime_metrics: false
+  analytics_profile_ref: System-Analytics-Profile
+  append_port: NEVER
+  capacity_estimation: false
+  capacity_estimation_ttfb_thresh: 0
+  cloud_ref: "{{ _cloud_ref }}"
+  conn_pool_properties:
+    upstream_connpool_conn_idle_tmo: 60000
+    upstream_connpool_conn_life_tmo: 600000
+    upstream_connpool_conn_max_reuse: 0
+    upstream_connpool_server_max_cache: 0
+  connection_ramp_duration: 10
+  default_server_port: {{ _backend_server_port }}
+  delete_server_on_dns_refresh: true
+  enable_http2: false
+  enabled: true
+  fail_action:
+    type: FAIL_ACTION_CLOSE_CONN
+  fewest_tasks_feedback_delay: 10
+  graceful_disable_timeout: 1
+  graceful_hm_down_disable_timeout: -1
+  health_monitor_refs:
+    - "{{ _health_monitor_name }}"
+  horizon_profile:
+    blast_port: 8443
+    pcoip_port: 4172
+  host_check_enabled: false
+  http2_properties:
+    max_http2_control_frames_per_connection: 0
+    max_http2_header_field_size: 4096
+  ignore_server_port: false
+  inline_health_monitor: false
+  lb_algo_rr_per_se: false
+  lb_algorithm: LB_ALGORITHM_LEAST_CONNECTIONS
+  lb_algorithm_core_nonaffinity: 2
+  lb_algorithm_hash: LB_ALGORITHM_CONSISTENT_HASH_SOURCE_IP_ADDRESS
+  lookup_server_by_name: false
+  max_concurrent_connections_per_server: 0
+  min_health_monitors_up: 1
+  name: "{{ _pool_name }}"
+  pool_type: POOL_TYPE_GENERIC_APP
+  request_queue_depth: 128
+  request_queue_enabled: false
+  rewrite_host_header_to_server_name: false
+  rewrite_host_header_to_sni: false
+  routing_pool: false
+  server_disable_type: DISALLOW_NEW_CONNECTION
+  server_reselect:
+    enabled: false
+    num_retries: 4
+    retry_nonidempotent: false
+    retry_timeout: 0
+  server_timeout: 0
+  servers:
+{% for ip in backend_server_ips %}
+    - enabled: true
+      hostname: "{{ ip }}"
+      ip:
+        addr: "{{ ip }}"
+        type: V4
+      port: {{ _backend_server_port }}
+      prst_hdr_val: ''
+      ratio: 1
+      resolve_server_by_dns: false
+      rewrite_host_header: false
+      static: false
+      verify_network: false
+{% endfor %}
+  sni_enabled: true
+  use_service_port: false
+  use_service_ssl_mode: false
+  vrf_ref: "{{ _vrf_ref }}"
+
+vsvip:
+  cloud_ref: "{{ _cloud_ref }}"
+  east_west_placement: false
+  name: "{{ _vsvip_name }}"
+  tenant_ref: "/api/tenant?name=admin"
+  tier1_lr: "{{ _vrf_context_ref }}"
+  vip:
+    - auto_allocate_floating_ip: false
+      auto_allocate_ip: false
+      auto_allocate_ip_type: V4_ONLY
+      avi_allocated_fip: false
+      avi_allocated_vip: false
+      enabled: true
+      ip_address:
+        addr: "{{ vip_address }}"
+        type: V4
+      vip_id: "1"
+
+virtual_service:
+  active_standby_se_tag: ACTIVE_STANDBY_SE_1
+  advertise_down_vs: false
+  allow_invalid_client_cert: false
+  analytics_policy:
+    all_headers: false
+    client_insights: NO_INSIGHTS
+    full_client_logs:
+      duration: {{ _full_client_logs_duration }}
+      enabled: false
+      throttle: 10
+    learning_log_policy:
+      enabled: false
+    metrics_realtime_update:
+      duration: 0
+      enabled: false
+    significant_log_throttle: 10
+    udf_log_throttle: 10
+  analytics_profile_ref: System-Analytics-Profile
+  application_profile_ref: System-L4-Application
+  bulk_sync_kvcache: false
+  close_client_conn_on_config_update: false
+  cloud_ref: "{{ _cloud_ref }}"
+  content_rewrite:
+    rewritable_content_ref: System-Rewritable-Content-Types
+  delay_fairness: false
+  enable_autogw: true
+  enable_session: false
+  enabled: true
+  error_page_profile_ref: Custom-Error-Page-Profile
+  flow_dist: LOAD_AWARE
+  flow_label_type: NO_LABEL
+  ign_pool_net_reach: false
+  limit_doser: false
+  max_cps_per_client: 0
+  name: "{{ virtual_service_name }}"
+  network_profile_ref: "{{ _network_profile_ref }}"
+  network_security_policy_ref: "{{ _network_security_policy_ref }}"
+  pool_ref: "{{ _pool_name }}"
+  redis_db: {{ _redis_db }}
+  redis_port: {{ _redis_port }}
+  remove_listening_port_on_vs_down: false
+  revoke_vip_route: false
+  scaleout_ecmp: true
+  se_group_ref: "{{ _se_group_ref }}"
+  self_se_election: false
+  services:
+    - enable_http2: false
+      enable_ssl: false
+      horizon_internal_ports: false
+      is_active_ftp_data_port: false
+      port: {{ _service_port }}
+      port_range_end: {{ _service_port }}
+  sideband_profile:
+    sideband_max_request_body_size: 1024
+  ssl_sess_cache_avg_size: 1024
+  traffic_enabled: true
+  type: VS_TYPE_NORMAL
+  use_bridge_ip_as_vip: false
+  use_vip_as_snat: false
+  vh_type: VS_TYPE_VH_SNI
+  vsvip_ref: "{{ _vsvip_name }}"
+  vrf_context_ref: "{{ _vrf_context_ref }}"
+  weight: 1

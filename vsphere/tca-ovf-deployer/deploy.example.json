@@ -1,0 +1,60 @@
+{
+  "common": {
+    "ovfToolPath": "/usr/local/bin/ovftool",
+    "ovaPath": "/path/to/VMware-Telco-Cloud-Automation-3.2.0-24287523.ova",
+    "username": "deployer@vsphere.local",
+    "vcenterPasswordEnv": "VCENTER_PASSWORD",
+    "datastore": "vsanDS-Management",
+    "cluster": "Management",
+    "vmFolder": "Management VMs",
+    "networkMappings": {
+      "VSMgmt": "Management VMs"
+    },
+    "diskMode": "thin",
+    "deploymentOption": "XLarge-ForTCAManagerwithWorkflowHubDeployments",
+    "dnsList": ["10.0.0.10", "10.0.0.11"],
+    "ntpList": ["10.0.0.12"],
+    "mgrCliPasswordEnv": "TCA_APPLIANCE_PASSWORD",
+    "mgrRootPasswordEnv": "TCA_APPLIANCE_PASSWORD",
+    "tcaUserPasswordEnv": "TCA_APPLIANCE_PASSWORD",
+    "sshEnabled": true,
+    "serviceWFH": true,
+    "applianceRole": "ControlPlane",
+    "ipProtocol": "IPv4",
+    "waitForIPSeconds": 1800,
+    "logDir": "logs",
+    "logLevel": "verbose",
+    "workerCount": 4,
+    "timeoutMinutes": 90,
+    "extraArgs": []
+  },
+  "sites": [
+    {
+      "id": "site-a-az01",
+      "name": "tca-cp-site-a-az01",
+      "hostname": "tca-cp-site-a-az01",
+      "externalAddress": "tca-cp-site-a-az01.example.com",
+      "ip": "10.1.1.22",
+      "prefix": "25",
+      "gateway": "10.1.1.1",
+      "vcenterHost": "vcenter-site-a-az01.example.com",
+      "datacenter": "DC-SITE-A-AZ01"
+    },
+    {
+      "id": "site-b-az01",
+      "name": "tca-cp-site-b-az01",
+      "hostname": "tca-cp-site-b-az01",
+      "externalAddress": "tca-cp-site-b-az01.example.com",
+      "ip": "10.2.1.22",
+      "prefix": "25",
+      "gateway": "10.2.1.1",
+      "vcenterHost": "vcenter-site-b-az01.example.com",
+      "datacenter": "DC-SITE-B-AZ01",
+      "networkMappings": {
+        "VSMgmt": "Mgmt-VLAN900"
+      },
+      "datastore": "vsanDS-Primary",
+      "cluster": "Management"
+    }
+  ]
+}

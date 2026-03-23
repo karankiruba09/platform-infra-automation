@@ -1,0 +1,25 @@
+required_variables:
+  - virtual_service_name
+  - vsvip_name
+  - vip_address
+  - pool_name
+  - backend_server_ips
+  - service_port
+  - backend_server_port
+  - health_monitor_name
+  - health_monitor_type
+  - network_profile_ref
+  - se_group_ref
+  - vs_analytics_full_client_logs_duration
+  - network_security_policy_ref
+optional_variables:
+  - cloud_ref
+  - vrf_ref
+  - vrf_context_ref
+  - health_monitor_monitor_port
+  - health_monitor_https_http_request
+  - health_monitor_ssl_profile_ref
+  - health_monitor_external_command_code
+  - health_monitor_external_command_variables
+  - redis_db
+  - redis_port

@@ -136,3 +136,6 @@ vault.yml
 **/public/*.csv
 **/public/*.json
 **/public/report*.html
+
+# --- Claude Code ---
+.claude/

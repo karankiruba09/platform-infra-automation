@@ -1,0 +1,109 @@
+---
+- name: Create or update Avi Virtual Service from standard template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    avi_tenant: admin
+    avi_api_version: "30.2.1"
+    avi_validate_certs: false
+    standard_template_file: "inputs/standard-vs-template.yaml.j2"
+    new_vs_values_file: "inputs/new-vs.values.yaml"
+
+  tasks:
+    - name: Resolve required inputs
+      ansible.builtin.assert:
+        that:
+          - avi_controller is defined
+          - avi_controller | length > 0
+          - avi_username is defined
+          - avi_username | length > 0
+          - avi_password is defined
+          - avi_password | length > 0
+        fail_msg: "Required vars: avi_controller, avi_username, avi_password"
+      no_log: true
+
+    - name: Resolve file paths
+      ansible.builtin.set_fact:
+        template_file_resolved: "{{ (standard_template_file if standard_template_file is match('^/.*') else (playbook_dir ~ '/../' ~ standard_template_file)) }}"
+        values_file_resolved: "{{ (new_vs_values_file if new_vs_values_file is match('^/.*') else (playbook_dir ~ '/../' ~ new_vs_values_file)) }}"
+
+    - name: Ensure template and values files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ template_file_resolved }}"
+        - "{{ values_file_resolved }}"
+      register: required_files
+
+    - name: Validate files found
+      ansible.builtin.assert:
+        that:
+          - required_files.results[0].stat.exists
+          - required_files.results[1].stat.exists
+        fail_msg: "Template or values file missing. Checked {{ template_file_resolved }} and {{ values_file_resolved }}"
+
+    - name: Load new VS values
+      ansible.builtin.include_vars:
+        file: "{{ values_file_resolved }}"
+
+    - name: Validate minimum required values for new VS
+      ansible.builtin.assert:
+        that:
+          - virtual_service_name is defined
+          - virtual_service_name | string | length > 0
+          - vip_address is defined
+          - vip_address | string | length > 0
+          - backend_server_ips is defined
+          - backend_server_ips | length > 0
+          - pool_name is defined
+          - service_port is defined
+          - backend_server_port is defined
+          - health_monitor_name is defined
+          - health_monitor_type is defined
+          - network_profile_ref is defined
+          - network_security_policy_ref is defined
+          - se_group_ref is defined
+          - vsvip_name is defined
+          - vs_analytics_full_client_logs_duration is defined
+        fail_msg: "Values file must include: virtual_service_name, vip_address, backend_server_ips, pool_name, service_port, backend_server_port, health_monitor_name, health_monitor_type, network_profile_ref, network_security_policy_ref, se_group_ref, vsvip_name, vs_analytics_full_client_logs_duration"
+
+    - name: Render standard template with new VS values
+      ansible.builtin.set_fact:
+        rendered_bundle: "{{ lookup('ansible.builtin.template', template_file_resolved) | from_yaml }}"
+
+    - name: Create temporary json bundle file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: ".json"
+      register: rendered_bundle_tmp
+
+    - name: Write rendered bundle JSON
+      ansible.builtin.copy:
+        dest: "{{ rendered_bundle_tmp.path }}"
+        content: "{{ rendered_bundle | to_json }}"
+        mode: "0600"
+
+    - name: Deploy virtual service from rendered bundle
+      ansible.builtin.shell: >-
+        {{ playbook_dir }}/../scripts/deploy_bundle.sh
+        --controller {{ avi_controller | quote }}
+        --username {{ avi_username | quote }}
+        --password {{ avi_password | quote }}
+        --tenant {{ avi_tenant | quote }}
+        --api-version {{ avi_api_version | quote }}
+        --bundle-file {{ rendered_bundle_tmp.path | quote }}
+        {{ '--insecure' if (not avi_validate_certs | bool) else '' }}
+      register: deploy_run
+      changed_when: "'created:' in deploy_run.stdout or 'updated:' in deploy_run.stdout"
+      no_log: true
+
+    - name: Remove temporary bundle file
+      ansible.builtin.file:
+        path: "{{ rendered_bundle_tmp.path }}"
+        state: absent
+
+    - name: Print deployment summary
+      ansible.builtin.debug:
+        msg: "Virtual Service deployment completed using {{ values_file_resolved }}"

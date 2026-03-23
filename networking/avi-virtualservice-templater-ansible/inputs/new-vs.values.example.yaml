@@ -1,0 +1,46 @@
+# VS identity
+virtual_service_name: VS_NAME
+
+# VIP / VSVIP
+vsvip_name: VS_VSVIP_NAME
+vip_address: VIP_IP_ADDRESS
+
+# Pool
+pool_name: VS_POOL_NAME
+backend_server_ips:
+  - BACKEND_SERVER_IP_1
+  - BACKEND_SERVER_IP_2
+backend_server_port: BACKEND_SERVER_PORT
+
+# VS listener
+service_port: SERVICE_PORT
+
+# Health monitor
+health_monitor_name: HEALTH_MONITOR_NAME
+health_monitor_type: HEALTH_MONITOR_HTTPS
+health_monitor_monitor_port: HEALTH_MONITOR_PORT
+health_monitor_https_http_request: "GET /health HTTP/1.0"
+# health_monitor_ssl_profile_ref: SSL_PROFILE_NAME
+
+# Profiles / placement
+network_profile_ref: NETWORK_PROFILE_NAME
+se_group_ref: SERVICE_ENGINE_GROUP_NAME
+
+# Additional VS differences from compare
+vs_analytics_full_client_logs_duration: VS_FULL_CLIENT_LOG_DURATION
+network_security_policy_ref: NETWORK_SECURITY_POLICY_NAME
+
+# Optional (only if you need non-default Redis values)
+# redis_db: REDIS_DB_NUMBER
+# redis_port: REDIS_PORT_NUMBER
+
+# Optional overrides only if needed
+# cloud_ref: CLOUD_NAME
+# vrf_ref: VRF_NAME
+# vrf_context_ref: VRF_CONTEXT_NAME
+
+# For external monitor type, provide these and set health_monitor_type: HEALTH_MONITOR_EXTERNAL
+# health_monitor_external_command_code: |
+#   #!/bin/bash
+#   exit 0
+# health_monitor_external_command_variables: "KEY=value"
