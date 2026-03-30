@@ -1,1 +1,3 @@
+# Disclaimer
+
 This repository contains sanitized, generic examples inspired by production environments. No proprietary code, credentials, or customer-specific information is included.
