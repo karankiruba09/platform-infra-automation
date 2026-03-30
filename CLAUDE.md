@@ -17,30 +17,37 @@ Production infrastructure operations toolkit for VMware ecosystem (vSphere, Avi,
 ## Languages and Tooling by Project Type
 
 ### Go projects (`kubernetes/tca-tkg-precheck`, `vsphere/tca-ovf-deployer`)
+
 ```bash
 make build    # go build -o bin/<binary> ./cmd/<name>
 make test     # go test ./...
 make run      # go run ./cmd/<name>
 make clean    # rm -rf bin
 ```
+
 Requires Go 1.21+. Uses `client-go` for Kubernetes API access.
 
 ### Python/Flask projects (`vsphere/esxi-upgrade-dashboard`, `vsphere/esxi-version-dashboard`)
+
 ```bash
 pip install -r requirements.txt
 python3 collector.py   # background data collector (pyvmomi → vCenter API)
 python3 api.py         # Flask web server
 ```
+
 Uses PyVmomi for vSphere API access.
 
 ### Ansible projects (`vsphere/vc-config-backup-report`, `networking/nsx-config-backup-manager`, `networking/avi-virtualservice-templater-ansible`)
+
 ```bash
 pip install -r requirements.txt
 ansible-playbook <playbook>.yml -i inventory.yml --ask-vault-pass
 ```
+
 Credentials are Ansible Vault-encrypted. Inventory files define target hosts/vCenters.
 
 ### Bash/PowerShell (`platform-upgrades/`)
+
 Run directly; no build step.
 
 ## Architecture Patterns
