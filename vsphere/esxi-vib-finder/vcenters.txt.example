@@ -1,0 +1,6 @@
+# List vCenter addresses, one per line.
+# Lines starting with # and blank lines are ignored.
+
+# vcenter01.example.com
+# vcenter02.example.com
+# 10.0.1.100
