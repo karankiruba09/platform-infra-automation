@@ -22,7 +22,7 @@
     "applianceRole": "ControlPlane",
     "ipProtocol": "IPv4",
     "waitForIPSeconds": 1800,
-    "logDir": "logs",
+    "logDir": "output/logs",
     "logLevel": "verbose",
     "workerCount": 9,
     "timeoutMinutes": 90,

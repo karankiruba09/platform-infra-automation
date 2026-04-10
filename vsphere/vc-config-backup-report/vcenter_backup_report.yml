@@ -1,12 +1,12 @@
 ---
 # vCenter Backup Configuration Report to CSV
-# Usage: ansible-playbook vcenter_backup_report.yml -i inventory.yml --ask-vault-pass
+# Usage: ansible-playbook vcenter_backup_report.yml -i inputs/inventory.yml --ask-vault-pass
 
 - name: Collect vCenter backup configuration
   hosts: vcenters
   gather_facts: false
   vars_files:
-    - vault.yml
+    - inputs/vault.yml
   vars:
     api_base: "https://{{ inventory_hostname }}/api"
 
@@ -99,7 +99,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    report_output_dir: "./reports"
+    report_output_dir: "./output"
     data_json_path: "{{ report_output_dir }}/vcenter_backup_data.json"
     report_csv_path: "{{ report_output_dir }}/vcenter_backup_report.csv"
 

@@ -19,7 +19,7 @@ Fast, refresh-on-demand dashboard to track ESXi versions across many vCenters (f
 
 ## Configure
 
-1) Copy `config/vcenters.txt.example` to `config/vcenters.txt` (the actual file is gitignored to keep secrets local), then edit it:
+1) Copy `inputs/vcenters.txt.example` to `inputs/vcenters.txt` (the actual file is gitignored to keep secrets local), then edit it:
 
 ```text
 # One per line:
@@ -30,10 +30,10 @@ prod-vc01|vcenter01.example.com
 prod-vc02|vcenter02.example.com
 ```
 
-2) Create `.env` (copy from `.env.example`) and set credentials:
+2) Create `inputs/.env` (copy from `inputs/.env.example`) and set credentials:
 
 ```bash
-cp .env.example .env
+cp inputs/.env.example inputs/.env
 ```
 
 ## Run
@@ -45,14 +45,14 @@ cp .env.example .env
 ```
 
 Artifacts:
-- `public/esxi_versions.json`
-- `public/esxi_hosts.csv`
-- `public/report.html`
+- `output/esxi_versions.json`
+- `output/esxi_hosts.csv`
+- `output/report.html`
 
 ### 2) View Report (no server)
 
 Open:
-- `public/report.html`
+- `output/report.html`
 
 ### 3) Optional: Start Dashboard (local server)
 
@@ -71,10 +71,10 @@ Use **Refresh** to re-collect live.
 
 ```bash
 ./scripts/collect.sh
-jq '.totals, (.rows[] | {vcenter, status, error})' public/esxi_versions.json
+jq '.totals, (.rows[] | {vcenter, status, error})' output/esxi_versions.json
 ```
 
-2) If you see `proxyconnect` or similar errors, keep `VC_UNSET_PROXY=true` in `.env` (recommended for internal vCenters).
+2) If you see `proxyconnect` or similar errors, keep `VC_UNSET_PROXY=true` in `inputs/.env` (recommended for internal vCenters).
 
 3) Debug raw output (keeps temp dir and prints its path):
 
@@ -84,7 +84,7 @@ jq '.totals, (.rows[] | {vcenter, status, error})' public/esxi_versions.json
 
 ## Tunables
 
-Set in `.env`:
+Set in `inputs/.env`:
 
 - `VC_PARALLEL` (default `20`) max concurrent vCenter collections
 - `VC_TIMEOUT_SECONDS` (default `12`) per-vCenter timeout

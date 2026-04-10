@@ -11,23 +11,25 @@ Concurrent, repeatable ovftool wrapper for deploying the Telco Cloud Automation 
 
 ## Layout
 - `main.go` — deployment CLI.
-- `deploy.example.json` — starter config to copy and edit.
+- `inputs/deploy.example.json` — starter config to copy and edit.
+- `inputs/deploy.json` — your real config (gitignored).
+- `output/logs/` — per-site deployment logs (gitignored).
 - `Makefile` — build, test, run, dry-run, and clean targets.
 
 ## Build
 ```bash
 make build          # compiles to bin/tca-ovf-deployer
 make test           # runs go test ./...
-make run            # build + run with deploy.json
+make run            # build + run with inputs/deploy.json
 make dry-run        # build + run with -dry-run flag
-make clean          # remove bin/ and logs/
+make clean          # remove bin/ and output/
 ```
 
 ## Quick start
 1) Copy the example config and edit it:
    ```bash
    cd platform-infra-automation/vsphere/tca-ovf-deployer
-   cp deploy.example.json deploy.json
+   cp inputs/deploy.example.json inputs/deploy.json
    ```
    Update paths, site entries, and (optionally) inline passwords. Prefer env vars for secrets.
 
@@ -39,20 +41,20 @@ make clean          # remove bin/ and logs/
 
 3) Run all sites (default worker pool size is auto-calculated; override with `-workers N`):
    ```bash
-   go run . -config deploy.json
+   go run . -config inputs/deploy.json
    ```
 
 4) Run a subset:
    ```bash
-   go run . -config deploy.json -sites site-a-az01,site-b-az01
+   go run . -config inputs/deploy.json -sites site-a-az01,site-b-az01
    ```
 
 5) Dry run (print commands with secrets masked, no execution):
    ```bash
-   go run . -config deploy.json -sites site-a-az01 -dry-run
+   go run . -config inputs/deploy.json -sites site-a-az01 -dry-run
    ```
 
-## Config reference (`deploy.example.json`)
+## Config reference (`inputs/deploy.example.json`)
 - `common` block sets defaults; any field can be overridden per-site.
 - Password sourcing order per field: site env var → site inline → common env var → common inline → error.
 - Key fields
@@ -69,7 +71,7 @@ make clean          # remove bin/ and logs/
   - `workerCount`: concurrency (default auto if 0).
 
 ## Logs
-Logs land under `logs/<site-id>/`:
+Logs land under `output/logs/<site-id>/`:
 - `ovf_deployment.log` (ovftool log)
 - `ovf_stdout.log`
 - `ovf_stderr.log`

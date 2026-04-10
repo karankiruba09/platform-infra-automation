@@ -7,7 +7,10 @@
 #   Phase 2 — check VIBs on ALL hosts in a single global worker pool (max throughput)
 #
 # Usage:
-#   ./find-vib.sh [vcenters.txt]
+#   ./find-vib.sh [path/to/vcenters.txt]
+#
+# Default vcenter list: ./inputs/vcenters.txt
+# Default output dir:   ./output
 #
 # Environment variables:
 #   GOVC_USERNAME          vCenter username (prompted if unset)
@@ -89,7 +92,7 @@ fi
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-VCENTER_FILE="${1:-${SCRIPT_DIR}/vcenters.txt}"
+VCENTER_FILE="${1:-${SCRIPT_DIR}/inputs/vcenters.txt}"
 
 if [[ ! -f "$VCENTER_FILE" ]]; then
     echo "Error: vCenter list not found: ${VCENTER_FILE}" >&2

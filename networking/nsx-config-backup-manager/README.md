@@ -9,14 +9,15 @@ Single Ansible project with two functions:
 
 ```text
 nsx-config-backup-manager/
-├── nsx_backup_manager.yml            # Single playbook (report + configure)
-├── inventory.yml                     # NSX manager list
-├── backup_policies.yml               # Input policy for configure mode
-├── vault.yml.example                 # Credentials template
-├── requirements.txt
+├── nsx_backup_manager.yml              # Single playbook (report + configure)
+├── inputs/                             # gitignored except *.example*
+│   ├── inventory.example.yml           # NSX manager list template
+│   ├── backup_policies.example.yml     # Configure-mode policy template
+│   └── vault.yml.example               # Credentials template
+├── output/                             # Generated report artifacts (gitignored)
 ├── templates/
 │   └── nsx_backup_report.csv.j2
-└── reports/                          # Generated report artifacts
+└── requirements.txt
 ```
 
 ## API Endpoints Used
@@ -38,37 +39,38 @@ pip install -r requirements.txt
 1. Prepare credentials:
 
 ```bash
-cp vault.yml.example vault.yml
-vim vault.yml
-ansible-vault encrypt vault.yml
+cp inputs/vault.yml.example inputs/vault.yml
+vim inputs/vault.yml
+ansible-vault encrypt inputs/vault.yml
 ```
 
 1. Set your NSX managers:
 
 ```bash
-vim inventory.yml
+cp inputs/inventory.example.yml inputs/inventory.yml
+vim inputs/inventory.yml
 ```
 
 ## Mode 1: Report Only
 
 ```bash
-ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass
+ansible-playbook nsx_backup_manager.yml -i inputs/inventory.yml --ask-vault-pass
 ```
 
 Outputs:
 
-- `./reports/nsx_backup_data.json`
-- `./reports/nsx_backup_report.csv`
+- `./output/nsx_backup_data.json`
+- `./output/nsx_backup_report.csv`
 
 ## Mode 2: Configure Backup Policy
 
-1. Edit `backup_policies.yml`.
+1. Copy and edit `inputs/backup_policies.example.yml` → `inputs/backup_policies.yml`.
 2. Run with explicit confirmation flag:
 
 ```bash
-ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass \
+ansible-playbook nsx_backup_manager.yml -i inputs/inventory.yml --ask-vault-pass \
   -e "nsx_operation=configure nsx_confirm_configure=true" \
-  -e @backup_policies.yml
+  -e @inputs/backup_policies.yml
 ```
 
 This applies the policy on each manager, then collects and writes the report artifacts.
@@ -82,5 +84,5 @@ Per-manager value is merged recursively over default.
 
 ## Notes
 
-- Set `nsx_validate_certs: true` in `inventory.yml` for trusted TLS in production.
+- Set `nsx_validate_certs: true` in `inputs/inventory.yml` for trusted TLS in production.
 - Keep secrets (for example remote backup server password) out of plaintext files; prefer vault-encrypted variables.

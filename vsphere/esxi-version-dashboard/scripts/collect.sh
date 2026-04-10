@@ -8,18 +8,18 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/collect.sh [--debug-keep-tmp]
 
-Collect ESXi host versions across vCenters listed in config/vcenters.txt and
-write JSON+CSV artifacts into ./public.
+Collect ESXi host versions across vCenters listed in inputs/vcenters.txt and
+write JSON+CSV artifacts into ./output.
 
 Options:
   --debug-keep-tmp   Keep the temporary working directory and print its path
 EOF
 }
 
-if [[ -f ".env" ]]; then
+if [[ -f "inputs/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source ".env"
+  source "inputs/.env"
   set +a
 fi
 
@@ -34,8 +34,8 @@ require_cmd govc
 require_cmd jq
 require_cmd timeout
 
-VCENTERS_FILE="${VCENTERS_FILE:-$ROOT_DIR/config/vcenters.txt}"
-OUT_DIR="${OUT_DIR:-$ROOT_DIR/public}"
+VCENTERS_FILE="${VCENTERS_FILE:-$ROOT_DIR/inputs/vcenters.txt}"
+OUT_DIR="${OUT_DIR:-$ROOT_DIR/output}"
 REPORT_JSON="${REPORT_JSON:-$OUT_DIR/esxi_versions.json}"
 HOSTS_CSV="${HOSTS_CSV:-$OUT_DIR/esxi_hosts.csv}"
 HOSTS_JSON="${HOSTS_JSON:-$OUT_DIR/esxi_hosts.json}"
@@ -68,7 +68,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$VC_USER" || -z "$VC_PASSWORD" ]]; then
-  echo "ERROR: VC_USER and VC_PASSWORD must be set (in .env or environment)" >&2
+  echo "ERROR: VC_USER and VC_PASSWORD must be set (in inputs/.env or environment)" >&2
   exit 2
 fi
 

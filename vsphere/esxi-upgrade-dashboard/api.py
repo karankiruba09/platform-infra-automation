@@ -9,8 +9,10 @@ from flask import Flask, jsonify, render_template, send_from_directory
 
 app = Flask(__name__)
 
-PUBLIC_DIR = Path(__file__).resolve().parent / "public"
-REPORT_PATH = PUBLIC_DIR / "vcenters.json"
+ROOT_DIR = Path(__file__).resolve().parent
+PUBLIC_DIR = ROOT_DIR / "public"
+OUTPUT_DIR = ROOT_DIR / "output"
+REPORT_PATH = OUTPUT_DIR / "vcenters.json"
 
 _activity = deque(maxlen=8)
 _last_generated_at: str | None = None
@@ -72,7 +74,7 @@ def index():
 
     data = load_report()
     if data is None:
-        banner = "No report found yet. Run python3 collector.py to generate public/vcenters.json."
+        banner = "No report found yet. Run python3 collector.py to generate output/vcenters.json."
         rows: list[dict[str, Any]] = []
         target = "-"
         generated_at = "-"

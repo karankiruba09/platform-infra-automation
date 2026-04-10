@@ -18,10 +18,11 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 PUBLIC_DIR = ROOT_DIR / "public"
+OUTPUT_DIR = ROOT_DIR / "output"
 COLLECTOR = ROOT_DIR / "scripts" / "collect.sh"
 
-REPORT_PATH = PUBLIC_DIR / "esxi_versions.json"
-HOSTS_CSV_PATH = PUBLIC_DIR / "esxi_hosts.csv"
+REPORT_PATH = OUTPUT_DIR / "esxi_versions.json"
+HOSTS_CSV_PATH = OUTPUT_DIR / "esxi_hosts.csv"
 STYLE_PATH = PUBLIC_DIR / "style.css"
 
 _refresh_lock = threading.Lock()

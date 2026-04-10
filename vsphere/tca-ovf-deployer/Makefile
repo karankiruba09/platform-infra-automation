@@ -1,7 +1,7 @@
 .PHONY: build test run clean dry-run
 
 BINARY := bin/tca-ovf-deployer
-CONFIG ?= deploy.json
+CONFIG ?= inputs/deploy.json
 
 build:
 	go build -o $(BINARY) .
@@ -16,4 +16,4 @@ dry-run: build
 	$(BINARY) -config $(CONFIG) -dry-run
 
 clean:
-	rm -rf bin logs
+	rm -rf bin output

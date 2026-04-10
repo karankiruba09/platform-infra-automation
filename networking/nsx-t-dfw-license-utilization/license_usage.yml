@@ -5,8 +5,8 @@
   connection: local
 
   vars_files:
-    - vars.yml
-    - vault.yml
+    - inputs/vars.yml
+    - inputs/vault.yml
 
   vars:
     nsx_api_base: "https://{{ inventory_hostname }}/api/v1"
@@ -129,7 +129,7 @@
       run_once: true
       delegate_to: localhost
       ansible.builtin.file:
-        path: reports
+        path: output
         state: directory
         mode: "0755"
 
@@ -137,7 +137,7 @@
       run_once: true
       delegate_to: localhost
       ansible.builtin.copy:
-        dest: reports/license_usage_report.json
+        dest: output/license_usage_report.json
         mode: "0644"
         content: |
           [
@@ -150,7 +150,7 @@
       run_once: true
       delegate_to: localhost
       ansible.builtin.copy:
-        dest: reports/license_usage_report.csv
+        dest: output/license_usage_report.csv
         mode: "0644"
         content: |
           manager,status,endpoint,feature,vm_usage_count,cpu_usage_count,ccu_usage_count,vcpu_usage_count,core_usage_count,error
@@ -163,8 +163,8 @@
       delegate_to: localhost
       ansible.builtin.debug:
         msg:
-          report_json: "reports/license_usage_report.json"
-          report_csv: "reports/license_usage_report.csv"
+          report_json: "output/license_usage_report.json"
+          report_csv: "output/license_usage_report.csv"
           total_managers: "{{ groups['nsx_managers'] | length }}"
           successful_managers: >-
             {{

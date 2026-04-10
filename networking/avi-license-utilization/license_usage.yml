@@ -7,8 +7,8 @@
     - community.network
 
   vars_files:
-    - vars.yml
-    - vault.yml
+    - inputs/vars.yml
+    - inputs/vault.yml
 
   tasks:
     - name: Query Avi license usage
@@ -74,7 +74,7 @@
       run_once: true
       delegate_to: localhost
       file:
-        path: reports
+        path: output
         state: directory
         mode: "0755"
 
@@ -82,7 +82,7 @@
       run_once: true
       delegate_to: localhost
       copy:
-        dest: reports/license_usage_report.json
+        dest: output/license_usage_report.json
         mode: "0644"
         content: |
           [
@@ -95,7 +95,7 @@
       run_once: true
       delegate_to: localhost
       copy:
-        dest: reports/license_usage_report.csv
+        dest: output/license_usage_report.csv
         mode: "0644"
         content: |
           controller,host,status,endpoint,consumed_service_cores,licensed_service_cores,se_units_consumed,error
@@ -108,8 +108,8 @@
       delegate_to: localhost
       debug:
         msg:
-          report_json: "reports/license_usage_report.json"
-          report_csv: "reports/license_usage_report.csv"
+          report_json: "output/license_usage_report.json"
+          report_csv: "output/license_usage_report.csv"
           total_controllers: "{{ groups['avi_controllers'] | length }}"
           successful_controllers: >-
             {{

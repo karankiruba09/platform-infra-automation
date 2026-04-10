@@ -62,7 +62,7 @@ pip install -r requirements.txt
 
 ### 3. Configure vCenters
 
-Copy `config/vcenters.yml.example` to `config/vcenters.yml` (the real file is gitignored) and edit it with your vCenter details:
+Copy `inputs/vcenters.yml.example` to `inputs/vcenters.yml` (the real file is gitignored) and edit with your vCenter details:
 
 ```yaml
 vcenters:
@@ -91,7 +91,7 @@ You should see output like:
 ✓ vCenter1: 24 hosts
 ✓ vCenter2: 32 hosts
 
-Wrote public/vcenters.json at 2026-01-27T14:32:45.123456+00:00
+Wrote output/vcenters.json at 2026-01-27T14:32:45.123456+00:00
 ```
 
 ### 5. Start the Dashboard
@@ -127,11 +127,11 @@ deactivate
    pip install -r requirements.txt
    ```
 
-4. Configure vCenter connections in `config/vcenters.yml`
+4. Configure vCenter connections in `inputs/vcenters.yml`
 
 ## Configuration
 
-Edit `config/vcenters.yml` to specify your vCenter instances and target ESXi version:
+Edit `inputs/vcenters.yml` to specify your vCenter instances and target ESXi version:
 
 ```yaml
 vcenters:
@@ -162,7 +162,7 @@ target_esxi_version: "8.0.3"
    ```bash
    python collector.py
    ```
-   This generates `public/vcenters.json` with the latest metrics.
+   This generates `output/vcenters.json` with the latest metrics.
 
 2. **Start the Flask web server**:
    ```bash
@@ -225,14 +225,17 @@ vc-esxi-upgrade-dashboard/
 ├── api.py                    # Flask web server
 ├── collector.py              # vCenter data collector
 ├── requirements.txt          # Python dependencies
-├── config/
-│   └── vcenters.yml         # vCenter configuration
+├── inputs/                   # gitignored except *.example*
+│   ├── vcenters.yml.example
+│   └── vcenters.yml          # your vCenter configuration (gitignored)
+├── output/                   # gitignored
+│   └── vcenters.json         # generated metrics (created by collector.py)
 ├── templates/
 │   └── index.html            # Server-rendered dashboard HTML (no JS)
 ├── public/
-│   ├── style.css            # Dashboard styles
-│   └── vcenters.json        # Generated metrics (created by collector.py)
-└── README.md                # This file
+│   ├── index.html            # Static dashboard fallback
+│   └── style.css             # Dashboard styles
+└── README.md                 # This file
 ```
 
 ## Health Status Logic
@@ -278,7 +281,7 @@ Set `insecure=False` and provide proper SSL certificates.
 ## Error Handling
 
 - Connection failures to a vCenter are logged but don't block other vCenters
-- Missing `public/vcenters.json` on startup returns an error (run collector first)
+- Missing `output/vcenters.json` on startup returns an error (run collector first)
 - API errors are displayed in the activity log on the dashboard
 
 ## Future Enhancements

@@ -13,14 +13,15 @@ avi-virtualservice-templater-ansible/
 │   └── create_virtual_service.yml
 ├── scripts/
 │   └── deploy_bundle.sh
-├── inputs/
+├── inputs/                            # gitignored except *.example* and *.j2
 │   ├── standard-vs-template.yaml.j2
-│   ├── standard-vs-variable-catalog.yaml
 │   ├── new-vs.values.example.yaml
-│   └── controller.env.example
-├── ansible.cfg
-├── inventory.yml
-└── artifacts/
+│   ├── controller.env.example
+│   └── inventory.example.yml
+├── docs/
+│   └── standard-vs-variable-catalog.yaml
+├── output/                            # gitignored, generated artifacts land here
+└── ansible.cfg
 ```
 
 ## What to edit

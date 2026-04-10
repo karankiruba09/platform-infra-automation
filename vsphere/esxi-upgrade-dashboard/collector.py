@@ -71,7 +71,7 @@ def build_vcenter_row(vcenter_name, hosts, target_version):
 
 def main():
     # Load vCenter config
-    with open("config/vcenters.yaml", "r") as f:
+    with open("inputs/vcenters.yml", "r") as f:
         cfg = yaml.safe_load(f)
 
     target_version = normalize_version(cfg["target_esxi_version"])
@@ -93,10 +93,12 @@ def main():
             print(f"✗ {vc['name']}: {e}")
 
     # Write JSON for dashboard
-    with open("public/vcenters.json", "w") as f:
+    import os
+    os.makedirs("output", exist_ok=True)
+    with open("output/vcenters.json", "w") as f:
         json.dump(out, f, indent=2)
 
-    print(f"\nWrote public/vcenters.json at {out['generated_at']}")
+    print(f"\nWrote output/vcenters.json at {out['generated_at']}")
 
 
 if __name__ == "__main__":

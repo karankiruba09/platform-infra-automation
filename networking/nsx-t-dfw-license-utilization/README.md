@@ -1,28 +1,31 @@
 # NSX-T DFW License Utilization
 
 ## Files
-- `inventory.ini.example`: example list of NSX managers
-- `inventory.ini`: local working inventory (gitignored)
+- `inputs/inventory.ini.example`: example list of NSX managers
+- `inputs/inventory.ini`: local working inventory (gitignored)
+- `inputs/vars.example.yml`: non-secret vars template
+- `inputs/vars.yml`: your local vars (gitignored)
+- `inputs/vault.yml.example`: encrypted secret vars template
+- `inputs/vault.yml`: your encrypted secret vars (gitignored)
 - `license_usage.yml`: playbook using the NSX-T `licenses-usage` API
-- `vars.yml`: non-secret vars
-- `vault.yml`: encrypted secret vars (create this)
-- `reports/license_usage_report.json`: generated JSON output
-- `reports/license_usage_report.csv`: generated CSV output
+- `output/license_usage_report.json`: generated JSON output (gitignored)
+- `output/license_usage_report.csv`: generated CSV output (gitignored)
 - `ansible.cfg`: local Ansible temp settings
 
 ## Create Local Files
 From this directory:
 
 ```bash
-cp inventory.ini.example inventory.ini
-cp vault.yml.example vault.yml
-ansible-vault encrypt vault.yml
+cp inputs/inventory.ini.example inputs/inventory.ini
+cp inputs/vars.example.yml inputs/vars.yml
+cp inputs/vault.yml.example inputs/vault.yml
+ansible-vault encrypt inputs/vault.yml
 ```
 
 Edit encrypted values:
 
 ```bash
-ansible-vault edit vault.yml
+ansible-vault edit inputs/vault.yml
 ```
 
 Set:
@@ -32,7 +35,7 @@ Set:
 From this directory:
 
 ```bash
-ansible-playbook -i inventory.ini license_usage.yml --ask-vault-pass
+ansible-playbook -i inputs/inventory.ini license_usage.yml --ask-vault-pass
 ```
 
 ## API
@@ -48,4 +51,4 @@ The summary extracts the `DFW` feature row and reports:
 
 Notes:
 - Basic Auth is used for simplicity.
-- `validate_certs` defaults to `false` in `vars.yml` for lab/internal environments.
+- `validate_certs` defaults to `false` in `inputs/vars.yml` for lab/internal environments.

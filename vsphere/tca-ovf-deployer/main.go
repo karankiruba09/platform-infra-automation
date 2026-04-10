@@ -314,7 +314,7 @@ func (tw *trackWriter) Close() error {
 // --- Main ---
 
 func main() {
-	configPath := flag.String("config", "deploy.json", "Path to JSON config file")
+	configPath := flag.String("config", "inputs/deploy.json", "Path to JSON config file")
 	sitesFlag := flag.String("sites", "", "Comma separated site IDs to deploy; default all")
 	dryRun := flag.Bool("dry-run", false, "Print commands without running ovftool")
 	workerOverride := flag.Int("workers", 0, "Override worker count from config")
@@ -349,7 +349,7 @@ func main() {
 
 	logDir := cfg.Common.LogDir
 	if logDir == "" {
-		logDir = "logs"
+		logDir = "output/logs"
 	}
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		exitWithErr(fmt.Errorf("failed to create log directory %s: %w", logDir, err))
@@ -580,7 +580,7 @@ func deploySite(common CommonConfig, site SiteConfig, baseLogDir string, dryRun 
 		logRoot = merged.LogDir
 	}
 	if logRoot == "" {
-		logRoot = "logs"
+		logRoot = "output/logs"
 	}
 
 	siteLogDir := filepath.Join(logRoot, sanitize(merged.Name))

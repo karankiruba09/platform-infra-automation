@@ -1,14 +1,14 @@
 ---
 # NSX Manager backup report + configuration
 # Usage examples:
-#   ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass
-#   ansible-playbook nsx_backup_manager.yml -i inventory.yml --ask-vault-pass -e "nsx_operation=configure nsx_confirm_configure=true" -e @backup_policies.yml
+#   ansible-playbook nsx_backup_manager.yml -i inputs/inventory.yml --ask-vault-pass
+#   ansible-playbook nsx_backup_manager.yml -i inputs/inventory.yml --ask-vault-pass -e "nsx_operation=configure nsx_confirm_configure=true" -e @inputs/backup_policies.yml
 
 - name: Manage NSX manager backup settings
   hosts: nsx_managers
   gather_facts: false
   vars_files:
-    - vault.yml
+    - inputs/vault.yml
   vars:
     nsx_operation: "{{ nsx_operation | default('report') }}"
     nsx_validate_certs: "{{ nsx_validate_certs | default(vcenter_validate_certs | default(false)) }}"
@@ -235,7 +235,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    report_output_dir: "{{ report_output_dir | default('./reports') }}"
+    report_output_dir: "{{ report_output_dir | default('./output') }}"
     report_json_path: "{{ report_output_dir }}/nsx_backup_data.json"
     report_csv_path: "{{ report_output_dir }}/nsx_backup_report.csv"
 

@@ -8,39 +8,40 @@ Ansible automation that audits backup configuration across vCenter appliances an
 # 1) Install dependencies
 pip install -r requirements.txt
 
-# 2) Edit vault.yml with credentials
-vim vault.yml
+# 2) Copy and edit the example inventory + vault
+cp inputs/inventory.example.yml inputs/inventory.yml
+vim inputs/inventory.yml
+vim inputs/vault.yml      # create with vcenter_user / vcenter_password
 
 # 3) Encrypt the vault
-ansible-vault encrypt vault.yml
-
-# 4) Add vCenter hosts in inventory.yml
-vim inventory.yml
+ansible-vault encrypt inputs/vault.yml
 
 # 5) Run the report
-ansible-playbook vcenter_backup_report.yml -i inventory.yml --ask-vault-pass
+ansible-playbook vcenter_backup_report.yml -i inputs/inventory.yml --ask-vault-pass
 ```
 
 Output files:
-- `./reports/vcenter_backup_data.json`
-- `./reports/vcenter_backup_report.csv`
+- `./output/vcenter_backup_data.json`
+- `./output/vcenter_backup_report.csv`
 
 ## Project Files
 
 ```text
 vc-config-backup-report/
-├── vcenter_backup_report.yml      # Main playbook
+├── vcenter_backup_report.yml         # Main playbook
 ├── templates/
-│   └── vcenter_backup_report.csv.j2 # CSV template renderer
-├── inventory.yml                  # vCenter host inventory
-├── vault.yml                      # Encrypted credentials
-├── requirements.txt               # Ansible dependency
-└── reports/                       # Generated artifacts
+│   └── vcenter_backup_report.csv.j2  # CSV template renderer
+├── inputs/                           # gitignored except *.example*
+│   ├── inventory.example.yml
+│   ├── inventory.yml                 # your real inventory (gitignored)
+│   └── vault.yml                     # encrypted credentials (gitignored)
+├── output/                           # generated reports (gitignored)
+└── requirements.txt
 ```
 
 ## Configuration
 
-### Credentials (`vault.yml`)
+### Credentials (`inputs/vault.yml`)
 
 ```yaml
 vcenter_user: "administrator@vsphere.local"
@@ -50,11 +51,11 @@ vcenter_password: "YourPasswordHere"
 Encrypt/edit with:
 
 ```bash
-ansible-vault encrypt vault.yml
-ansible-vault edit vault.yml
+ansible-vault encrypt inputs/vault.yml
+ansible-vault edit inputs/vault.yml
 ```
 
-### Inventory (`inventory.yml`)
+### Inventory (`inputs/inventory.yml`)
 
 ```yaml
 all:
@@ -78,25 +79,25 @@ all:
 Basic run:
 
 ```bash
-ansible-playbook vcenter_backup_report.yml -i inventory.yml --ask-vault-pass
+ansible-playbook vcenter_backup_report.yml -i inputs/inventory.yml --ask-vault-pass
 ```
 
 With vault password file:
 
 ```bash
-ansible-playbook vcenter_backup_report.yml -i inventory.yml --vault-password-file .vault_pass
+ansible-playbook vcenter_backup_report.yml -i inputs/inventory.yml --vault-password-file .vault_pass
 ```
 
 Custom output path:
 
 ```bash
-ansible-playbook vcenter_backup_report.yml -i inventory.yml --ask-vault-pass -e "report_output_dir=/opt/reports"
+ansible-playbook vcenter_backup_report.yml -i inputs/inventory.yml --ask-vault-pass -e "report_output_dir=/opt/output"
 ```
 
 Single vCenter:
 
 ```bash
-ansible-playbook vcenter_backup_report.yml -i inventory.yml --ask-vault-pass --limit vcenter01.prod.local
+ansible-playbook vcenter_backup_report.yml -i inputs/inventory.yml --ask-vault-pass --limit vcenter01.prod.local
 ```
 
 ## CSV Columns
@@ -126,7 +127,7 @@ The latest job is selected from `/api/appliance/recovery/backup/job/details`, in
 ### `UNKNOWN`/`N/A` in job fields
 
 - Ensure the account has `Appliance.Backup.Configuration` read privilege.
-- Re-run and check `reports/vcenter_backup_data.json` contains `job_details`.
+- Re-run and check `output/vcenter_backup_data.json` contains `job_details`.
 
 ### No schedules
 
