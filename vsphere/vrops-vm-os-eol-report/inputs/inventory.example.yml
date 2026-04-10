@@ -1,0 +1,15 @@
+---
+# List your vROps instances here
+# Credentials are stored in vault.yml (encrypted with ansible-vault)
+
+all:
+  children:
+    vrops:
+      hosts:
+        vrops01.example.com:
+        vrops02.example.com:
+  vars:
+    vrops_validate_certs: false
+    vrops_auth_source: local          # 'local' for local users, or your vIDM auth source name
+    ansible_connection: local
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"

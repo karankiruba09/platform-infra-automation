@@ -1,0 +1,39 @@
+{% set categories = ['Linux', 'Ubuntu/Debian', 'Photon-OS', 'FreeBSD', 'Vendor-OVA', 'Windows'] %}
+{% set counts = {} %}
+{% for cat in categories %}
+  {% set _ = counts.update({cat: {'footprint': 0, 'supported': 0, 'eol': 0}}) %}
+{% endfor %}
+{% for vm in classified_vms %}
+  {% set cat = vm.category %}
+  {% if counts[cat] is not defined %}
+    {% set _ = counts.update({cat: {'footprint': 0, 'supported': 0, 'eol': 0}}) %}
+  {% endif %}
+  {% set c = counts[cat] %}
+  {% set _ = c.update({'footprint': c.footprint + 1}) %}
+  {% if vm.eol_status == 'EOL' %}
+    {% set _ = c.update({'eol': c.eol + 1}) %}
+  {% else %}
+    {% set _ = c.update({'supported': c.supported + 1}) %}
+  {% endif %}
+{% endfor %}
+{% set rows = [] %}
+{% set _ = rows.append('"Technology","Footprint","Supported","OS-EOL","EOL%"') %}
+{% set totals = {'footprint': 0, 'supported': 0, 'eol': 0} %}
+{% for cat in categories %}
+  {% set c = counts[cat] %}
+  {% if c.footprint > 0 %}
+    {% set eol_pct = '%.2f%%' | format((c.eol / c.footprint * 100) if c.footprint > 0 else 0) %}
+    {% set _ = rows.append('"' ~ cat ~ '",' ~ c.footprint ~ ',' ~ c.supported ~ ',' ~ c.eol ~ ',"' ~ eol_pct ~ '"') %}
+    {% set _ = totals.update({'footprint': totals.footprint + c.footprint, 'supported': totals.supported + c.supported, 'eol': totals.eol + c.eol}) %}
+  {% endif %}
+{% endfor %}
+{% for cat, c in counts.items() %}
+  {% if cat not in categories and c.footprint > 0 %}
+    {% set eol_pct = '%.2f%%' | format((c.eol / c.footprint * 100) if c.footprint > 0 else 0) %}
+    {% set _ = rows.append('"' ~ cat ~ '",' ~ c.footprint ~ ',' ~ c.supported ~ ',' ~ c.eol ~ ',"' ~ eol_pct ~ '"') %}
+    {% set _ = totals.update({'footprint': totals.footprint + c.footprint, 'supported': totals.supported + c.supported, 'eol': totals.eol + c.eol}) %}
+  {% endif %}
+{% endfor %}
+{% set total_eol_pct = '%.2f%%' | format((totals.eol / totals.footprint * 100) if totals.footprint > 0 else 0) %}
+{% set _ = rows.append('"Total",' ~ totals.footprint ~ ',' ~ totals.supported ~ ',' ~ totals.eol ~ ',"' ~ total_eol_pct ~ '"') %}
+{{ rows | join('\n') }}

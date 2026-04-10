@@ -1,0 +1,6 @@
+{% set rows = [] %}
+{% set _ = rows.append('"VM Name","Guest OS","Category","EOL Status"') %}
+{% for vm in classified_vms | sort(attribute='name') %}
+{% set _ = rows.append('"' ~ (vm.name | replace('"', '""')) ~ '","' ~ (vm.guest_os | replace('"', '""')) ~ '","' ~ vm.category ~ '","' ~ vm.eol_status ~ '"') %}
+{% endfor %}
+{{ rows | join('\n') }}

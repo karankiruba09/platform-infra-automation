@@ -1,0 +1,198 @@
+# OS EOL Reference Map
+# Maps vROps guest OS names to EOL status and technology category.
+# Update this file when new OS versions are released or reach end-of-life.
+#
+# Categories: Linux, Ubuntu/Debian, Photon-OS, FreeBSD, Vendor-OVA, Windows
+# Status: Supported, EOL
+
+os_eol_map:
+  # --- CentOS (all EOL) ---
+  "CentOS 4/5 (64-bit)":
+    status: EOL
+    category: Linux
+  "CentOS 6 (64-bit)":
+    status: EOL
+    category: Linux
+  "CentOS 7 (64-bit)":
+    status: EOL
+    category: Linux
+  "CentOS 8 (64-bit)":
+    status: EOL
+    category: Linux
+  "CentOS 4/5 (32-bit)":
+    status: EOL
+    category: Linux
+  "CentOS 6 (32-bit)":
+    status: EOL
+    category: Linux
+
+  # --- Red Hat Enterprise Linux ---
+  "Red Hat Enterprise Linux 5 (64-bit)":
+    status: EOL
+    category: Linux
+  "Red Hat Enterprise Linux 6 (64-bit)":
+    status: EOL
+    category: Linux
+  "Red Hat Enterprise Linux 7 (64-bit)":
+    status: Supported
+    category: Linux
+  "Red Hat Enterprise Linux 8 (64-bit)":
+    status: Supported
+    category: Linux
+  "Red Hat Enterprise Linux 9 (64-bit)":
+    status: Supported
+    category: Linux
+  "Red Hat Fedora (64-bit)":
+    status: EOL
+    category: Linux
+
+  # --- Oracle Linux ---
+  "Oracle Linux 4/5 (64-bit)":
+    status: EOL
+    category: Linux
+  "Oracle Linux 4/5/6 (64-bit)":
+    status: EOL
+    category: Linux
+  "Oracle Linux 4/5/6/7 (64-bit)":
+    status: Supported
+    category: Linux
+  "Oracle Linux 8 (64-bit)":
+    status: Supported
+    category: Linux
+  "Oracle Linux 9 (64-bit)":
+    status: Supported
+    category: Linux
+
+  # --- SUSE Linux Enterprise ---
+  "SUSE Linux Enterprise 11 (64-bit)":
+    status: EOL
+    category: Linux
+  "SUSE Linux Enterprise 12 (64-bit)":
+    status: Supported
+    category: Linux
+  "SUSE Linux Enterprise 15 (64-bit)":
+    status: Supported
+    category: Linux
+
+  # --- Rocky Linux ---
+  "Rocky Linux (64-bit)":
+    status: Supported
+    category: Linux
+
+  # --- Other Linux variants ---
+  "Other 2.6.x Linux (32-bit)":
+    status: EOL
+    category: Linux
+  "Other 2.6.x Linux (64-bit)":
+    status: EOL
+    category: Linux
+  "Other 3.x Linux (64-bit)":
+    status: Supported
+    category: Linux
+  "Other 3.x or later Linux (64-bit)":
+    status: Supported
+    category: Linux
+  "Other 4.x Linux (64-bit)":
+    status: Supported
+    category: Linux
+  "Other 4.x or later Linux (64-bit)":
+    status: Supported
+    category: Linux
+  "Other 5.x Linux (64-bit)":
+    status: Supported
+    category: Linux
+  "Other 5.x or later Linux (64-bit)":
+    status: Supported
+    category: Linux
+  "Other Linux (64-bit)":
+    status: Supported
+    category: Linux
+
+  # --- Ubuntu / Debian ---
+  "Ubuntu Linux (64-bit)":
+    status: Supported
+    category: Ubuntu/Debian
+  "Debian GNU/Linux 10 (64-bit)":
+    status: EOL
+    category: Ubuntu/Debian
+  "Debian GNU/Linux 11 (64-bit)":
+    status: Supported
+    category: Ubuntu/Debian
+  "Debian GNU/Linux 12 (64-bit)":
+    status: Supported
+    category: Ubuntu/Debian
+
+  # --- Photon OS ---
+  "VMware Photon CRX (64-bit)":
+    status: Supported
+    category: Photon-OS
+  "VMware Photon OS (64-bit)":
+    status: Supported
+    category: Photon-OS
+
+  # --- FreeBSD ---
+  "FreeBSD (64-bit)":
+    status: Supported
+    category: FreeBSD
+  "FreeBSD 11 (64-bit)":
+    status: EOL
+    category: FreeBSD
+  "FreeBSD 12 (32-bit)":
+    status: Supported
+    category: FreeBSD
+  "FreeBSD 12 or later versions (32-bit)":
+    status: Supported
+    category: FreeBSD
+  "FreeBSD 13 or later versions (64-bit)":
+    status: Supported
+    category: FreeBSD
+
+  # --- Windows ---
+  "Microsoft Windows Server 2012 (64-bit)":
+    status: Supported
+    category: Windows
+  "Microsoft Windows Server 2016 (64-bit)":
+    status: Supported
+    category: Windows
+  "Microsoft Windows Server 2016 or later (64-bit)":
+    status: Supported
+    category: Windows
+  "Microsoft Windows Server 2019 (64-bit)":
+    status: Supported
+    category: Windows
+  "Microsoft Windows Server 2022 (64-bit)":
+    status: Supported
+    category: Windows
+
+  # --- Vendor OVA / Appliances ---
+  "Other (64-bit)":
+    status: Supported
+    category: Vendor-OVA
+
+  # --- No OS / Unknown ---
+  "none":
+    status: Supported
+    category: Vendor-OVA
+
+# Category classification rules for OS strings not found in the map above.
+# The collector uses these keyword rules to auto-classify unrecognized OS names.
+# Order matters: first match wins.
+category_rules:
+  - keyword: "Windows"
+    category: Windows
+    status: Supported
+  - keyword: "Ubuntu"
+    category: Ubuntu/Debian
+    status: Supported
+  - keyword: "Debian"
+    category: Ubuntu/Debian
+    status: Supported
+  - keyword: "Photon"
+    category: Photon-OS
+    status: Supported
+  - keyword: "FreeBSD"
+    category: FreeBSD
+    status: Supported
+  - keyword: "Linux"
+    category: Linux
+    status: Supported

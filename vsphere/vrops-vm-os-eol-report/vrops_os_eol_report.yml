@@ -1,0 +1,286 @@
+---
+# vROps VM OS EOL Report
+# Connects to VMware Aria Operations (vROps) API, collects VM guest OS data,
+# and generates an OS end-of-life (EOL) summary report by technology category.
+#
+# Usage: ansible-playbook vrops_os_eol_report.yml --ask-vault-pass
+
+- name: Collect VM guest OS data from vROps
+  hosts: vrops
+  gather_facts: false
+  vars_files:
+    - inputs/vault.yml
+  vars:
+    api_base: "https://{{ inventory_hostname }}/suite-api"
+    page_size: 5000
+
+  tasks:
+    - name: Authenticate to vROps
+      ansible.builtin.uri:
+        url: "{{ api_base }}/api/auth/token/acquire"
+        method: POST
+        headers:
+          Content-Type: application/json
+          Accept: application/json
+        body_format: json
+        body:
+          username: "{{ vrops_user }}"
+          authSource: "{{ vrops_auth_source | default('local') }}"
+          password: "{{ vrops_password }}"
+        validate_certs: "{{ vrops_validate_certs | default(false) }}"
+        status_code: 200
+        return_content: true
+      register: auth
+      no_log: true
+
+    - name: Set auth token
+      ansible.builtin.set_fact:
+        vrops_token: >-
+          {% if auth.json is defined and auth.json.token is defined %}
+          {{ auth.json.token }}
+          {% elif auth.content is defined %}
+          {% set content = auth.content | trim %}
+          {% if content.startswith('{') %}
+          {{ (content | from_json).token }}
+          {% elif '<ops-token>' in content %}
+          {{ content | regex_search('<ops-token>(.*?)</ops-token>', '\1') | first }}
+          {% else %}
+          {{ content }}
+          {% endif %}
+          {% endif %}
+      no_log: true
+
+    - name: Verify token acquired
+      ansible.builtin.fail:
+        msg: "Failed to extract auth token from vROps response"
+      when: vrops_token | trim | length == 0
+
+    # --- Fetch all VM resources (parallel pages) ---
+
+    - name: Fetch VM resources (page 0)
+      ansible.builtin.uri:
+        url: "{{ api_base }}/api/resources?resourceKind=VirtualMachine&adapterKind=VMWARE&pageSize={{ page_size }}&page=0"
+        method: GET
+        headers:
+          Authorization: "vRealizeOpsToken {{ vrops_token | trim }}"
+          Accept: application/json
+        validate_certs: "{{ vrops_validate_certs | default(false) }}"
+        return_content: true
+        timeout: 300
+      register: vm_page0
+      no_log: true
+
+    - name: Determine total VM count and pages
+      ansible.builtin.set_fact:
+        total_vms: "{{ vm_page0.json.pageInfo.totalCount | int }}"
+        total_pages: "{{ ((vm_page0.json.pageInfo.totalCount | int) / (page_size | int)) | round(0, 'ceil') | int }}"
+        all_vms: "{{ vm_page0.json.resourceList | default([]) }}"
+
+    - name: "Progress: fetched page 0 — {{ all_vms | length }}/{{ total_vms }} VMs"
+      ansible.builtin.debug:
+        msg: "{{ all_vms | length }} VMs fetched (page 0 of {{ total_pages }})"
+
+    - name: Fetch remaining VM pages (async)
+      ansible.builtin.uri:
+        url: "{{ api_base }}/api/resources?resourceKind=VirtualMachine&adapterKind=VMWARE&pageSize={{ page_size }}&page={{ item }}"
+        method: GET
+        headers:
+          Authorization: "vRealizeOpsToken {{ vrops_token | trim }}"
+          Accept: application/json
+        validate_certs: "{{ vrops_validate_certs | default(false) }}"
+        return_content: true
+        timeout: 300
+      loop: "{{ range(1, total_pages | int) | list }}"
+      async: 300
+      poll: 0
+      register: vm_page_jobs
+      no_log: true
+      when: total_pages | int > 1
+
+    - name: Wait for remaining VM pages
+      ansible.builtin.async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ vm_page_jobs.results | default([]) }}"
+      register: vm_page_results
+      until: vm_page_results is finished
+      retries: 60
+      delay: 5
+      no_log: true
+      when: total_pages | int > 1
+
+    - name: Combine all VM resources
+      ansible.builtin.set_fact:
+        all_vms: >-
+          {{ all_vms +
+             (vm_page_results.results | default([])
+              | selectattr('json', 'defined')
+              | map(attribute='json.resourceList')
+              | flatten) }}
+      no_log: true
+      when: total_pages | int > 1
+
+    - name: Build VM ID-to-name map
+      ansible.builtin.set_fact:
+        vm_id_name_map: >-
+          {{ dict(all_vms | map(attribute='identifier')
+                  | zip(all_vms | map(attribute='resourceKey')
+                        | map(attribute='name'))) }}
+      no_log: true
+
+    - name: "Progress: {{ vm_id_name_map | length }} VMs found, fetching guest OS properties..."
+      ansible.builtin.debug:
+        msg: "Fetching guest OS for {{ vm_id_name_map | length }} VMs"
+
+    # --- Bulk-fetch guest OS properties (async batches) ---
+
+    - name: Bulk-fetch guest OS properties (async)
+      ansible.builtin.uri:
+        url: "{{ api_base }}/api/resources/properties/latest/query"
+        method: POST
+        headers:
+          Authorization: "vRealizeOpsToken {{ vrops_token | trim }}"
+          Accept: application/json
+          Content-Type: application/json
+        body_format: json
+        body:
+          resourceIds: "{{ item }}"
+          propertyKeys:
+            - "config|guestFullName"
+            - "config|guestId"
+            - "summary|runtime|powerState"
+        validate_certs: "{{ vrops_validate_certs | default(false) }}"
+        return_content: true
+        timeout: 300
+      loop: "{{ vm_id_name_map.keys() | list | batch(page_size | int) | list }}"
+      async: 300
+      poll: 0
+      register: prop_jobs
+      no_log: true
+
+    - name: Wait for property fetches
+      ansible.builtin.async_status:
+        jid: "{{ item.ansible_job_id }}"
+      loop: "{{ prop_jobs.results }}"
+      register: prop_results
+      until: prop_results is finished
+      retries: 60
+      delay: 5
+      no_log: true
+
+    - name: Parse VM guest OS data
+      ansible.builtin.set_fact:
+        vm_os_data: "{{ prop_results.results | vrops_parse_properties(vm_id_name_map) }}"
+      no_log: true
+
+    - name: Release auth token
+      ansible.builtin.uri:
+        url: "{{ api_base }}/api/auth/token/release"
+        method: POST
+        headers:
+          Authorization: "vRealizeOpsToken {{ vrops_token | trim }}"
+          Accept: application/json
+        validate_certs: "{{ vrops_validate_certs | default(false) }}"
+        status_code: [200, 204]
+      ignore_errors: true
+      no_log: true
+
+    - name: Store collected data
+      ansible.builtin.set_fact:
+        vrops_vm_data:
+          hostname: "{{ inventory_hostname }}"
+          total_vms: "{{ vm_os_data | length }}"
+          vms: "{{ vm_os_data }}"
+          collected_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+- name: Generate OS EOL report
+  hosts: localhost
+  gather_facts: false
+  vars:
+    report_output_dir: "./output"
+    eol_map_file: "eol_map.yml"
+  vars_files:
+    - "eol_map.yml"
+
+  tasks:
+    - name: Create output directory
+      ansible.builtin.file:
+        path: "{{ report_output_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Collect all VM data from vROps hosts
+      ansible.builtin.set_fact:
+        all_vm_data: >-
+          {{ groups['vrops']
+             | map('extract', hostvars, 'vrops_vm_data')
+             | select('truthy')
+             | list }}
+      no_log: true
+
+    - name: Flatten VM list across all vROps instances
+      ansible.builtin.set_fact:
+        all_vms_flat: >-
+          {{ all_vm_data | map(attribute='vms') | flatten }}
+      no_log: true
+
+    - name: Fail if no data collected
+      ansible.builtin.fail:
+        msg: "No VM data was collected. Check earlier tasks for failures."
+      when: all_vms_flat | length == 0
+
+    - name: Classify VMs by OS EOL status
+      ansible.builtin.set_fact:
+        classified_vms: "{{ all_vms_flat | vrops_classify_vms(os_eol_map, category_rules | default([])) }}"
+      no_log: true
+
+    - name: Render summary CSV
+      ansible.builtin.set_fact:
+        summary_csv: "{{ lookup('template', 'templates/os_eol_summary.csv.j2') | trim }}"
+
+    - name: Write summary CSV
+      ansible.builtin.copy:
+        dest: "{{ report_output_dir }}/os_eol_summary.csv"
+        content: "{{ summary_csv ~ '\n' }}"
+        mode: "0644"
+
+    - name: Render detail CSV
+      ansible.builtin.set_fact:
+        detail_csv: "{{ lookup('template', 'templates/os_eol_detail.csv.j2') | trim }}"
+
+    - name: Write detail CSV
+      ansible.builtin.copy:
+        dest: "{{ report_output_dir }}/os_eol_detail.csv"
+        content: "{{ detail_csv ~ '\n' }}"
+        mode: "0644"
+
+    - name: Render OS mapping CSV
+      ansible.builtin.set_fact:
+        mapping_csv: "{{ lookup('template', 'templates/os_eol_mapping.csv.j2') | trim }}"
+
+    - name: Write OS mapping CSV
+      ansible.builtin.copy:
+        dest: "{{ report_output_dir }}/os_eol_mapping.csv"
+        content: "{{ mapping_csv ~ '\n' }}"
+        mode: "0644"
+
+    - name: Build JSON report
+      ansible.builtin.copy:
+        dest: "{{ report_output_dir }}/os_eol_report.json"
+        content: >-
+          {{ {'generated_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
+              'total_vms': all_vms_flat | length,
+              'sources': all_vm_data | map(attribute='hostname') | list}
+             | to_nice_json }}
+        mode: "0644"
+
+    - name: Display summary report
+      ansible.builtin.debug:
+        msg: "{{ summary_csv.split('\n') }}"
+
+    - name: Report locations
+      ansible.builtin.debug:
+        msg:
+          - "Summary:  {{ report_output_dir }}/os_eol_summary.csv"
+          - "Detail:   {{ report_output_dir }}/os_eol_detail.csv"
+          - "Mapping:  {{ report_output_dir }}/os_eol_mapping.csv"
+          - "JSON:     {{ report_output_dir }}/os_eol_report.json"

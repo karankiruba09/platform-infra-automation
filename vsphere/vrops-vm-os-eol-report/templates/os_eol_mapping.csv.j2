@@ -1,0 +1,12 @@
+{% set seen = {} %}
+{% for vm in classified_vms %}
+  {% if vm.guest_os not in seen %}
+    {% set _ = seen.update({vm.guest_os: vm.eol_status}) %}
+  {% endif %}
+{% endfor %}
+{% set rows = [] %}
+{% set _ = rows.append('"OS","EOL Status"') %}
+{% for os in seen.keys() | sort(case_sensitive=false) %}
+{% set _ = rows.append('"' ~ (os | replace('"', '""')) ~ '","' ~ seen[os] ~ '"') %}
+{% endfor %}
+{{ rows | join('\n') }}

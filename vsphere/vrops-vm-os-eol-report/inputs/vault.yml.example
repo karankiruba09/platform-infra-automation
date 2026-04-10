@@ -1,0 +1,4 @@
+---
+# Encrypt this file with: ansible-vault encrypt inputs/vault.yml
+vrops_user: admin
+vrops_password: changeme
